@@ -39,7 +39,6 @@ Help message
 START_MESSAGE = "Welcome! Type /help to get help."
 HELP_BUTTON = "⁉️" + "Help"
 CURRENCY_LIST_BUTTON = "List of available currencies"
-BACK_BUTTON = "⬅️ Back"
 
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
@@ -205,15 +204,6 @@ class TelegramBot():
 					result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
 					result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper()
 
-				#Scraping XE.com is technically illegal, but here's the code.
-				# page = getHTML_specifyEncoding('http://www.xe.com/currencyconverter/convert/?Amount=' + str(parse[0]) + "&From=" + str(parse[1]) + "&To=" + str(parse[2])
-				# 	# ,encoding='cp1251'
-				# 	,method='replace')
-				# soup = BeautifulSoup(page)
-				# result = soup.find_all("tr",class_="uccRes")[0].text.replace("\n"," ")
-
-
-				# print(result)
 				self.sendMessage(chat_id=chat_id
 					,text=str(result)
 					)
