@@ -25,6 +25,25 @@ logging.basicConfig(format = u'[%(asctime)s] %(filename)s[LINE:%(lineno)d]# %(le
 ##PARAMETERS
 ############
 
+CURRENCY_NAMES = {
+	"RUB": "Russian Rouble"
+	,"USD": "U.S. Dollar"
+	,"EUR": "Euro"
+	,"SEK": "Swedish Krona"
+	,"AUD": "Australian Dollar"
+	,"NOK": "Norwegian Krone"
+	,"CZK": "Czech Koruna"
+	,"DKK": "Danish Krone"
+	,"GBP": "British Pound Sterling"
+	,"BGN": "Bulgarian Lev"
+	,"BRL": "Brazilian Real"
+	,"PLN": "Polish Zloty"
+	,"NZD": "New Zealand Dollar"
+	,"JPY": "Japanese Yen"
+	,"CHF": "Swiss Franc"
+	,"CAD": "Canadian Dollar"
+}
+
 #A filename of a file containing a token.
 TOKEN_FILENAME = 'token'
 
@@ -150,17 +169,28 @@ class TelegramBot():
 			break
 		return updates
 
+	def FixerIO_GetData(self,parse):
+		'''
+		Gets currency data from fixer.io (Which in turn gets data from ECB)
+		'''
+		page = getHTML_specifyEncoding('https://api.fixer.io/latest?base=' + parse[1].upper() + '&symbols=' + parse[2].upper() 
+			,method='replace')
+		result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
+		result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper()
+		return result
+
+
+	def FixerIO_getCurrencyList(self):
+		page = getHTML_specifyEncoding('https://api.fixer.io/latest')
+		result = list(json.loads(page)['rates'].keys() )
+		result.sort()
+		result = [i.upper() for i in result]
+		return result
 
 	def echo(self):
 		bot = self.bot
 
 		updates = self.getUpdates()
-
-		def getCurrencyList():
-			page = getHTML_specifyEncoding('https://api.fixer.io/latest')
-			result = list(json.loads(page)['rates'].keys() )
-			result.sort()
-			return result
 
 		for update in updates:
 			chat_id = update.message.chat_id
@@ -184,13 +214,13 @@ class TelegramBot():
 					,text=HELP_MESSAGE
 					)
 			elif message == CURRENCY_LIST_BUTTON:
-				result = "*Available currencies:* \n" + "\n".join( getCurrencyList() )
+				result = "*Available currencies:* \n" + "\n".join( [(i + ( " - " + CURRENCY_NAMES[i] if i in CURRENCY_NAMES else "" ) ) for i in FixerIO_getCurrencyList()] )
 				self.sendMessage(chat_id=chat_id
 					,text=str(result)
 					)
 			else:
 				parse = message.split(" ")
-				currency_list = getCurrencyList()
+				currency_list = FixerIO_getCurrencyList()
 
 				if ( len(parse) != 3 ) or not is_number(parse[0]):
 					result = "Invalid format! Use format \"[number] [From this currency] [To this currency]\""
@@ -199,10 +229,10 @@ class TelegramBot():
 				elif parse[2].upper() not in currency_list:
 					result = "Unknown currency: " + parse[2].upper()
 				else:
-					page = getHTML_specifyEncoding('https://api.fixer.io/latest?base=' + parse[1].upper() + '&symbols=' + parse[2].upper() 
-						,method='replace')
-					result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
-					result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper()
+
+					result = self.FixerIO_GetData(parse)
+
+
 
 				self.sendMessage(chat_id=chat_id
 					,text=str(result)
