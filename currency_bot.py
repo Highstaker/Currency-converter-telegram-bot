@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 #TODO
 
+VERSION_NUMBER = (0,3,0)
+
 import logging
 import telegram
 from time import time
@@ -55,6 +57,19 @@ HELP_MESSAGE = '''
 Help message
 '''
 
+ABOUT_MESSAGE = """*Currency Converter Bot*
+_Created by:_ Highstaker a.k.a. OmniSable.
+Source: https://github.com/Highstaker/Currency-converter-telegram-bot
+Version: """ + ".".join([str(i) for i in VERSION_NUMBER]) + """
+
+This bot uses the python-telegram-bot library.
+https://github.com/leandrotoledo/python-telegram-bot
+
+Rates are received from ECB
+"""
+
+
+ABOUT_BUTTON = "ℹ️ About"
 START_MESSAGE = "Welcome! Type /help to get help."
 HELP_BUTTON = "⁉️" + "Help"
 CURRENCY_LIST_BUTTON = "List of available currencies"
@@ -64,7 +79,7 @@ def split_list(alist,max_size=1):
 	for i in range(0, len(alist), max_size):
 		yield alist[i:i+max_size]
 
-MAIN_MENU_KEY_MARKUP = [[CURRENCY_LIST_BUTTON],[HELP_BUTTON]]
+MAIN_MENU_KEY_MARKUP = [[CURRENCY_LIST_BUTTON],[HELP_BUTTON,ABOUT_BUTTON]]
 
 ################
 ###GLOBALS######
@@ -213,14 +228,18 @@ class TelegramBot():
 				self.sendMessage(chat_id=chat_id
 					,text=HELP_MESSAGE
 					)
+			elif message == "/about" or message == ABOUT_BUTTON:
+				self.sendMessage(chat_id=chat_id
+					,text=ABOUT_MESSAGE
+					)
 			elif message == CURRENCY_LIST_BUTTON:
-				result = "*Available currencies:* \n" + "\n".join( [(i + ( " - " + CURRENCY_NAMES[i] if i in CURRENCY_NAMES else "" ) ) for i in FixerIO_getCurrencyList()] )
+				result = "*Available currencies:* \n" + "\n".join( [(i + ( " - " + CURRENCY_NAMES[i] if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
 				self.sendMessage(chat_id=chat_id
 					,text=str(result)
 					)
 			else:
 				parse = message.split(" ")
-				currency_list = FixerIO_getCurrencyList()
+				currency_list = self.FixerIO_getCurrencyList()
 
 				if ( len(parse) != 3 ) or not is_number(parse[0]):
 					result = "Invalid format! Use format \"[number] [From this currency] [To this currency]\""
@@ -229,7 +248,6 @@ class TelegramBot():
 				elif parse[2].upper() not in currency_list:
 					result = "Unknown currency: " + parse[2].upper()
 				else:
-
 					result = self.FixerIO_GetData(parse)
 
 
