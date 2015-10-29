@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #TODO
 
-VERSION_NUMBER = (0,3,0)
+VERSION_NUMBER = (0,3,1)
 
 import logging
 import telegram
@@ -142,6 +142,7 @@ class TelegramBot():
 		logging.warning("Replying to " + str(chat_id) + ": " + text)
 		while True:
 			try:
+				self.bot.sendChatAction(chat_id,telegram.ChatAction.TYPING)
 				self.bot.sendMessage(chat_id=chat_id,
 					text=text,
 					parse_mode='Markdown',
@@ -162,6 +163,7 @@ class TelegramBot():
 		while True:
 			try:
 				logging.debug("Picture: " + str(pic))
+				self.bot.sendChatAction(chat_id,telegram.ChatAction.UPLOAD_PHOTO)
 				#set file read cursor to the beginning. This ensures that if a file needs to be re-read (may happen due to exception), it is read from the beginning.
 				pic.seek(0)
 				self.bot.sendPhoto(chat_id=chat_id,photo=pic)
