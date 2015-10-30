@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #TODO
 
-VERSION_NUMBER = (0,3,1)
+VERSION_NUMBER = (0,3,2)
 
 import logging
 import telegram
@@ -53,8 +53,19 @@ TOKEN_FILENAME = 'token'
 SUBSCRIBERS_BACKUP_FILE = '/tmp/multitran_bot_subscribers_bak'
 
 
+ABOUT_BUTTON = "ℹ️ About"
+START_MESSAGE = "Welcome! Type /help to get help."
+HELP_BUTTON = "⁉️" + "Help"
+CURRENCY_LIST_BUTTON = "List of available currencies"
+
 HELP_MESSAGE = '''
-Help message
+This bot converts currencies.
+Input format: [amount] [source currency] [destination currency]
+
+For example, to convert 99 U.S. Dollars 50 cents to Euros, type:
+99 USD EUR
+
+To see a list of available currencies and their codes, press the \"''' + CURRENCY_LIST_BUTTON + '''\" button.
 '''
 
 ABOUT_MESSAGE = """*Currency Converter Bot*
@@ -69,10 +80,6 @@ Rates are received from ECB
 """
 
 
-ABOUT_BUTTON = "ℹ️ About"
-START_MESSAGE = "Welcome! Type /help to get help."
-HELP_BUTTON = "⁉️" + "Help"
-CURRENCY_LIST_BUTTON = "List of available currencies"
 
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
@@ -199,7 +206,7 @@ class TelegramBot():
 
 	def FixerIO_getCurrencyList(self):
 		page = getHTML_specifyEncoding('https://api.fixer.io/latest')
-		result = list(json.loads(page)['rates'].keys() )
+		result = list(json.loads(page)['rates'].keys() ) + [ json.loads(page)['base'] ]
 		result.sort()
 		result = [i.upper() for i in result]
 		return result
