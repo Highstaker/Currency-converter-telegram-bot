@@ -63,7 +63,7 @@ This bot converts currencies.
 Input format: [amount] [source currency] [destination currency]
 
 For example, to convert 99 U.S. Dollars 50 cents to Euros, type:
-99 USD EUR
+99.50 USD EUR
 
 To see a list of available currencies and their codes, press the \"''' + CURRENCY_LIST_BUTTON + '''\" button.
 '''
