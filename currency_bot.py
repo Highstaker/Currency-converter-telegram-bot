@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #TODO
 
-VERSION_NUMBER = (0,3,2)
+VERSION_NUMBER = (0,3,3)
 
 import logging
 import telegram
@@ -149,12 +149,13 @@ class TelegramBot():
 		logging.warning("Replying to " + str(chat_id) + ": " + text)
 		while True:
 			try:
-				self.bot.sendChatAction(chat_id,telegram.ChatAction.TYPING)
-				self.bot.sendMessage(chat_id=chat_id,
-					text=text,
-					parse_mode='Markdown',
-					reply_markup=telegram.ReplyKeyboardMarkup(key_markup)
-					)
+				if text:
+					self.bot.sendChatAction(chat_id,telegram.ChatAction.TYPING)
+					self.bot.sendMessage(chat_id=chat_id,
+						text=text,
+						parse_mode='Markdown',
+						reply_markup=telegram.ReplyKeyboardMarkup(key_markup)
+						)
 			except Exception as e:
 				if "Message is too long" in str(e):
 					self.sendMessage(chat_id=chat_id
@@ -229,41 +230,45 @@ class TelegramBot():
 			except KeyError:
 				self.subscribers[chat_id] = 1
 
-			if message == "/start":
-				self.sendMessage(chat_id=chat_id
-					,text=START_MESSAGE
-					)
-			elif message == "/help" or message == HELP_BUTTON:
-				self.sendMessage(chat_id=chat_id
-					,text=HELP_MESSAGE
-					)
-			elif message == "/about" or message == ABOUT_BUTTON:
-				self.sendMessage(chat_id=chat_id
-					,text=ABOUT_MESSAGE
-					)
-			elif message == CURRENCY_LIST_BUTTON:
-				result = "*Available currencies:* \n" + "\n".join( [(i + ( " - " + CURRENCY_NAMES[i] if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
-				self.sendMessage(chat_id=chat_id
-					,text=str(result)
-					)
-			else:
-				parse = message.split(" ")
-				currency_list = self.FixerIO_getCurrencyList()
+			try:
+				if message:
+					if message == "/start":
+						self.sendMessage(chat_id=chat_id
+							,text=START_MESSAGE
+							)
+					elif message == "/help" or message == HELP_BUTTON:
+						self.sendMessage(chat_id=chat_id
+							,text=HELP_MESSAGE
+							)
+					elif message == "/about" or message == ABOUT_BUTTON:
+						self.sendMessage(chat_id=chat_id
+							,text=ABOUT_MESSAGE
+							)
+					elif message == CURRENCY_LIST_BUTTON:
+						result = "*Available currencies:* \n" + "\n".join( [(i + ( " - " + CURRENCY_NAMES[i] if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
+						self.sendMessage(chat_id=chat_id
+							,text=str(result)
+							)
+					else:
+						parse = message.split(" ")
+						currency_list = self.FixerIO_getCurrencyList()
 
-				if ( len(parse) != 3 ) or not is_number(parse[0]):
-					result = "Invalid format! Use format \"[number] [From this currency] [To this currency]\""
-				elif parse[1].upper() not in currency_list:
-					result = "Unknown currency: " + parse[1].upper()
-				elif parse[2].upper() not in currency_list:
-					result = "Unknown currency: " + parse[2].upper()
-				else:
-					result = self.FixerIO_GetData(parse)
+						if ( len(parse) != 3 ) or not is_number(parse[0]):
+							result = "Invalid format! Use format \"[number] [From this currency] [To this currency]\""
+						elif parse[1].upper() not in currency_list:
+							result = "Unknown currency: " + parse[1].upper()
+						elif parse[2].upper() not in currency_list:
+							result = "Unknown currency: " + parse[2].upper()
+						else:
+							result = self.FixerIO_GetData(parse)
 
 
 
-				self.sendMessage(chat_id=chat_id
-					,text=str(result)
-					)
+					self.sendMessage(chat_id=chat_id
+						,text=str(result)
+						)
+			except Exception as e:
+				logging.error("Message processing failed! Error: " + str(e))
 
 			# Updates global offset to get the new updates
 			self.LAST_UPDATE_ID = update.update_id + 1
