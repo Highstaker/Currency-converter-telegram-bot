@@ -113,12 +113,12 @@ _Автор:_ Highstaker a.k.a. OmniSable.
 }
 
 RATE_ME_MESSAGE = {"EN": """
-You seem to like this bot. You can rate it [here](about:blank)!
+You seem to like this bot. You can rate it [here](https://storebot.me/bot/omnicurrencyexchangebot)!
 
 Your ⭐️⭐️⭐️⭐️⭐️ would be really appreciated!
 """
 ,"RU": """
-Нравится бот? Оцените его [здесь](about:blank)!
+Нравится бот? Оцените его [здесь](https://storebot.me/bot/omnicurrencyexchangebot)!
 
 Буду очень рад хорошим отзывам! 8)
 ⭐️⭐️⭐️⭐️⭐️ 
