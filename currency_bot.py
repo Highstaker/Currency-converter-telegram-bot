@@ -1,8 +1,11 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #TODO
+#-Add more sources. ECB is not sufficient
+#-Add dates. What the rate was a while ago?
+#-Graphs/charts over days
 
-VERSION_NUMBER = (0,4,0)
+VERSION_NUMBER = (0,4,1)
 
 import logging
 import telegram
@@ -279,8 +282,16 @@ class TelegramBot():
 		'''
 		page = getHTML_specifyEncoding('https://api.fixer.io/latest?base=' + parse[1].upper() + '&symbols=' + parse[2].upper() 
 			,method='replace')
-		result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
-		result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper()
+		if "Invalid base" in page:
+			result = "Invalid base"
+			print("Invalid base")#debug
+		else:
+			try:
+				result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
+				result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper()
+			except IndexError as e:
+				result="No Result"
+
 		return result
 
 
@@ -346,16 +357,18 @@ class TelegramBot():
 							)
 					else:
 						parse = message.split(" ")
-						currency_list = self.FixerIO_getCurrencyList()
+						result = self.FixerIO_GetData(parse)
 
 						if ( len(parse) != 3 ) or not is_number(parse[0]):
 							result = self.languageSupport(chat_id,INVALID_FORMAT_MESSAGE)
-						elif parse[1].upper() not in currency_list:
+						elif "Invalid base" in result:
 							result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
-						elif parse[2].upper() not in currency_list:
+						elif "No Result" in result:
 							result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
 						else:
-							result = self.FixerIO_GetData(parse)
+							pass
+							# result = self.FixerIO_GetData(parse)
+
 						self.sendMessage(chat_id=chat_id
 							,text=str(result)
 							)
