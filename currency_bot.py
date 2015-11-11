@@ -5,7 +5,7 @@
 #-Add dates. What the rate was a while ago?
 #-Graphs/charts over days
 
-VERSION_NUMBER = (0,4,1)
+VERSION_NUMBER = (0,5,0)
 
 import logging
 import telegram
@@ -131,9 +131,17 @@ Your ⭐️⭐️⭐️⭐️⭐️ would be really appreciated!
 INVALID_FORMAT_MESSAGE = {"EN":"Invalid format! Use format \"\[amount] \[source currency] \[destination currency]\""
 ,"RU": "Неверный формат! Используйте формат \"\[количество единиц валюты] \[обозначение валюты, *из которой* надо перевести] \[обозначение валюты, *в которую* надо перевести]\""
 }
-UNKNOWN_CURRENCY_MESSAGE = {"EN": "Unknown currency: "
-,"RU": "Неизвестная валюта: "
+UNKNOWN_CURRENCY_MESSAGE = {"EN": "Unknown currency or no data available for this currency for the given date: "
+,"RU": "Неизвестная валюта, или нет данных для этой валюты для указанной даты: "
 }
+
+RESULT_DATE_MESSAGE = {"EN": "This rate is given for this date: ", "RU": "Курс указан по состоянию на: "}
+
+DATE_TOO_OLD_MESSAGE = {"EN": "The given date is too old. There are no results available for it." , "RU": "Дата слишком давняя. Для неё нет результатов"}
+
+COULD_NOT_FIND_DATA_MESSAGE = {"EN": "Could not find any data. Is the date format correct?", "RU": "Не могу найти данные. Верный ли формат даты?"}
+
+DATE_INCORRECT_MESSAGE  = {"EN":"Date is incorrect!", "RU": "Неверная дата!"}
 
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
@@ -276,21 +284,35 @@ class TelegramBot():
 			break
 		return updates
 
-	def FixerIO_GetData(self,parse):
+	def FixerIO_GetData(self,parse,chat_id=None):
 		'''
 		Gets currency data from fixer.io (Which in turn gets data from ECB)
 		'''
-		page = getHTML_specifyEncoding('https://api.fixer.io/latest?base=' + parse[1].upper() + '&symbols=' + parse[2].upper() 
+		if len(parse)==4:
+			date=str(parse[3])
+		else:
+			date="latest"
+
+		page = getHTML_specifyEncoding('https://api.fixer.io/' + date + '?base=' + parse[1].upper() + '&symbols=' + parse[2].upper() 
 			,method='replace')
 		if "Invalid base" in page:
 			result = "Invalid base"
 			print("Invalid base")#debug
+		elif "date too old" in page.lower():
+			result= self.languageSupport(chat_id,DATE_TOO_OLD_MESSAGE)
+		elif "not found" in page.lower():
+			result=self.languageSupport(chat_id,COULD_NOT_FIND_DATA_MESSAGE)
+		elif "invalid date" in page.lower():
+			result=self.languageSupport(chat_id,DATE_INCORRECT_MESSAGE)
 		else:
 			try:
 				result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
-				result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper()
+				result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) +"*" + json.loads(page)['date']
 			except IndexError as e:
 				result="No Result"
+				print("No Result")#debug
+			except KeyError as e:
+				result="Unknown error"
 
 		return result
 
@@ -359,15 +381,17 @@ class TelegramBot():
 						parse = message.split(" ")
 						result = self.FixerIO_GetData(parse)
 
-						if ( len(parse) != 3 ) or not is_number(parse[0]):
+						if not ( len(parse) == 3 or len(parse) == 4) or not is_number(parse[0]):
 							result = self.languageSupport(chat_id,INVALID_FORMAT_MESSAGE)
-						elif "Invalid base" in result:
-							result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
-						elif "No Result" in result:
-							result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
 						else:
-							pass
-							# result = self.FixerIO_GetData(parse)
+
+							if "Invalid base" in result:
+								result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
+							elif "No Result" in result:
+								result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
+							else:
+								pass
+								# result = self.FixerIO_GetData(parse)
 
 						self.sendMessage(chat_id=chat_id
 							,text=str(result)
