@@ -10,7 +10,7 @@
 #-put graph-getting into a separate process to prevent bot chunking
 #-prevent bot from getting messages from a user while it processes graph
 
-VERSION_NUMBER = (0,6,2)
+VERSION_NUMBER = (0,6,3)
 
 import logging
 import telegram
@@ -41,25 +41,27 @@ logging.basicConfig(format = u'[%(asctime)s] %(filename)s[LINE:%(lineno)d]# %(le
 
 TEMP_PLOT_IMAGE_FILE_PATH = '/tmp/001.png'
 
+MAXIMUM_DOTS_PER_CHART = 30
+
 CURRENCY_NAMES = {
 	"RUB": {"EN":"Russian Rouble","RU": "Российский рубль"}
 	,"USD": {"EN":"U.S. Dollar","RU": "Доллар США"}
 	,"EUR": {"EN":"Euro", "RU": "Евро"}
 	,"SEK": {"EN":"Swedish Krona","RU": "Шведская крона"}
-	,"AUD": "Australian Dollar"
-	,"NOK": "Norwegian Krone"
+	,"AUD": {"EN":"Australian Dollar","RU":"Австралийский доллар"}
+	,"NOK": {"EN":"Norwegian Krone","RU":"Норвежская крона"}
 	,"CZK": {"EN":"Czech Koruna","RU":"Чешская крона"}
-	,"DKK": "Danish Krone"
-	,"GBP": "British Pound Sterling"
-	,"BGN": "Bulgarian Lev"
-	,"BRL": "Brazilian Real"
-	,"PLN": "Polish Zloty"
-	,"NZD": "New Zealand Dollar"
-	,"JPY": "Japanese Yen"
-	,"CHF": "Swiss Franc"
-	,"CAD": "Canadian Dollar"
-	,"ZAR":	"South African rand"
-	,"SGD": ""
+	,"DKK": {"EN":"Danish Krone","RU":"Датская крона"}
+	,"GBP": {"EN":"British Pound Sterling","RU":"Британский фунт стерлингов"}
+	,"BGN": {"EN":"Bulgarian Lev","RU":"Болгарский лев"}
+	,"BRL": {"EN":"Brazilian Real","RU":"Бразильский реал"}
+	,"PLN": {"EN":"Polish Zloty","RU":"Польский злотый"}
+	,"NZD": {"EN":"New Zealand Dollar","RU":"Новозеландский доллар"}
+	,"JPY": {"EN":"Japanese Yen","RU":"Японская йена"}
+	,"CHF": {"EN":"Swiss Franc","RU":"Швейцарский франк"}
+	,"CAD": {"EN":"Canadian Dollar","RU":"Канадский доллар"}
+	,"ZAR":	{"EN":"South African rand","RU":"Южноафриканский рэнд"}
+	,"SGD": {"EN":"Singaporean Dollar","RU":"Сингапурский доллар"}
 }
 
 #A filename of a file containing a token.
@@ -463,49 +465,70 @@ class TelegramBot():
 								'''
 								return (Date - date(1970,1,1)).days
 
-							def rm_doubles(seq):
+							def rm_doubles(seq,respective_seq=None):
 								'''
-								Remove duplicates from list,preserving order
+								Remove duplicates from list,preserving order.
+								If respective_seq is specified, the indicies respective to the ones removed from seq will be removed from respective_seq as well.
 								'''
 								seen = set()
 								seen_add = seen.add
-								return [ x for x in seq if not (x in seen or seen_add(x))]
-
-
-							start_date = datetime.strptime(parse[2],"%Y-%m-%d").date()
-							end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
-
-							UNIX_dates = []
-							rates = []
-							text_dates = []
-
-							date_range = daterange(start_date,end_date)
+								if not respective_seq:
+									return [ x for x in seq if not (x in seen or seen_add(x))]
+								else:
+									rm_indexes = []
+									seq_new = []
+									for n,x in enumerate(seq):
+										if x in seen:
+											rm_indexes.append(n)
+										else:
+											seq_new.append(x)
+											seen_add(x)
+									print("rm_indexes",rm_indexes)
+									rm_indexes.sort(reverse=True)
+									for i in rm_indexes:
+										respective_seq.pop(i)
+									return seq_new, respective_seq
 
 							try:
-								for DATE in date_range:
-									pass
-									data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
-									text_dates += [ data['date'] ]
-									UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
-									rates += [data['rate']]
+								start_date = datetime.strptime(parse[2],"%Y-%m-%d").date()
+								end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
+							except:
+								result = "Invalid date format!"
+							else:
+								UNIX_dates = []
+								rates = []
+								text_dates = []
 
-								text_dates = rm_doubles(text_dates)
-								UNIX_dates = rm_doubles(UNIX_dates)
-								rates = rm_doubles(rates)
+								date_range = list(daterange(start_date,end_date))
+
+								while len(date_range)>MAXIMUM_DOTS_PER_CHART:
+									#remove every second entry until the range is smaller than the maximum
+									date_range = date_range[::2]
+
+								try:
+									for DATE in date_range:
+										pass
+										data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
+										text_dates += [ data['date'] ]
+										UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
+										rates += [data['rate']]
+
+									text_dates = rm_doubles(text_dates)
+									UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
 
 
-								print(text_dates)#debug
-								print(UNIX_dates)#debug
-								print(rates)#debug
+									print(text_dates)#debug
+									print(UNIX_dates)#debug
+									print(rates)#debug
 
-								create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
+									create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
 
-								with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-									self.sendPic(chat_id=chat_id,pic=pic)
+									with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
+										self.sendPic(chat_id=chat_id,pic=pic)
 
-								result = ""
-							except Exception as e:
-								result = "Error! Could not draw graph."
+									result = ""
+								except Exception as e:
+									result = "Error! Could not draw graph: " + str(e)
 
 					else:
 						#user asks for one rate
