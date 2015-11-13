@@ -2,20 +2,24 @@
 # -*- coding: utf-8 -*-
 #TODO
 #-Add more sources. ECB is not sufficient
-#-Add dates. What the rate was a while ago?
-#-Graphs/charts over days
+#+Graphs/charts over days
+#-error handling in graphs
 
-VERSION_NUMBER = (0,5,0)
+VERSION_NUMBER = (0,6,0)
 
 import logging
 import telegram
 from time import time
+import sys
+import os
 from os import path, listdir, walk
 import socket
 import pickle #module for saving dictionaries to file
 from bs4 import BeautifulSoup #HTML parser
 import re
 import json
+from datetime import date, timedelta, datetime
+import matplotlib.pyplot as plt
 
 from webpage_reader import getHTML_specifyEncoding
 
@@ -29,6 +33,8 @@ logging.basicConfig(format = u'[%(asctime)s] %(filename)s[LINE:%(lineno)d]# %(le
 ############
 ##PARAMETERS
 ############
+
+TEMP_PLOT_IMAGE_FILE_PATH = '/tmp/001.png'
 
 CURRENCY_NAMES = {
 	"RUB": {"EN":"Russian Rouble","RU": "Российский рубль"}
@@ -154,6 +160,8 @@ COULD_NOT_FIND_DATA_MESSAGE = {"EN": "Could not find any data. Is the date forma
 
 DATE_INCORRECT_MESSAGE  = {"EN":"Date is incorrect!", "RU": "Неверная дата!"}
 
+UNKNOWN_ERROR_MESSAGE = {"EN": "Unknown error!", "RU": "Неизвестная ошибка!"}
+
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
 	for i in range(0, len(alist), max_size):
@@ -261,11 +269,11 @@ class TelegramBot():
 						)
 					break
 				if ("urlopen error" in str(e)) or ("timed out" in str(e)):
-					logging.error("Could not send message. Retrying! Error: " + str(e))
+					logging.error("Could not send message. Retrying! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 					sleep(3)
 					continue
 				else:
-					logging.error("Could not send message. Error: " + str(e))
+					logging.error("Could not send message. Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 			break
 
 	def sendPic(self,chat_id,pic):
@@ -277,7 +285,7 @@ class TelegramBot():
 				pic.seek(0)
 				self.bot.sendPhoto(chat_id=chat_id,photo=pic)
 			except Exception as e:
-				logging.error("Could not send picture. Retrying! Error: " + str(e))
+				logging.error("Could not send picture. Retrying! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 				continue
 			break
 
@@ -290,7 +298,7 @@ class TelegramBot():
 			try:
 				updates = self.bot.getUpdates(offset=self.LAST_UPDATE_ID, timeout=3)
 			except Exception as e:
-				logging.error("Could not read updates. Retrying! Error: " + str(e))
+				logging.error("Could not read updates. Retrying! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 				continue
 			break
 		return updates
@@ -307,23 +315,16 @@ class TelegramBot():
 		page = getHTML_specifyEncoding('https://api.fixer.io/' + date + '?base=' + parse[1].upper() + '&symbols=' + parse[2].upper() 
 			,method='replace')
 		if "Invalid base" in page:
-			result = "Invalid base"
+			result = {'error':"Invalid base"}
 			print("Invalid base")#debug
 		elif "date too old" in page.lower():
-			result= self.languageSupport(chat_id,DATE_TOO_OLD_MESSAGE)
+			result= {'error': self.languageSupport(chat_id,DATE_TOO_OLD_MESSAGE)}
 		elif "not found" in page.lower():
-			result=self.languageSupport(chat_id,COULD_NOT_FIND_DATA_MESSAGE)
+			result={'error': self.languageSupport(chat_id,COULD_NOT_FIND_DATA_MESSAGE)}
 		elif "invalid date" in page.lower():
-			result=self.languageSupport(chat_id,DATE_INCORRECT_MESSAGE)
+			result={'error': self.languageSupport(chat_id,DATE_INCORRECT_MESSAGE)}
 		else:
-			try:
-				result = float( list(json.loads(page)['rates'].values())[0] ) * float(parse[0])
-				result = parse[0] + " " + parse[1].upper() + " = " + str(result) + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) +"*" + json.loads(page)['date']
-			except IndexError as e:
-				result="No Result"
-				print("No Result")#debug
-			except KeyError as e:
-				result="Unknown error"
+			result = json.loads(page)
 
 		return result
 
@@ -333,6 +334,28 @@ class TelegramBot():
 		result = list(json.loads(page)['rates'].keys() ) + [ json.loads(page)['base'] ]
 		result.sort()
 		result = [i.upper() for i in result]
+		return result
+
+	def getData(self,parse,chat_id=None):
+		'''
+		Universal data getter handling several sources
+		'''
+
+		page = self.FixerIO_GetData(parse)
+		if 'error' in page.keys():
+			pass
+			if "Invalid base" in page['error']:
+				result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
+			else:
+				result = page['error']
+		else:
+			try:
+				rate = float(list(page['rates'].values())[0]) * float(parse[0])
+				date = page['date']
+				result = {'rate' : rate, 'date': date}
+			except IndexError:
+				result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
+
 		return result
 
 	def echo(self):
@@ -353,62 +376,116 @@ class TelegramBot():
 			except KeyError:
 				self.subscribers[chat_id] = ["EN"]
 
-			try:
-				if message:
-					if message == "/start":
-						self.sendMessage(chat_id=chat_id
-							,text=self.languageSupport(chat_id,START_MESSAGE)
-							)
-					elif message == "/help" or message == self.languageSupport(chat_id,HELP_BUTTON):
-						self.sendMessage(chat_id=chat_id
-							,text=self.languageSupport(chat_id,HELP_MESSAGE)
-							)
-					elif message == "/about" or message == self.languageSupport(chat_id,ABOUT_BUTTON):
-						self.sendMessage(chat_id=chat_id
-							,text=self.languageSupport(chat_id,ABOUT_MESSAGE)
-							)
-					elif message == "/rate" or message == self.languageSupport(chat_id,RATE_ME_BUTTON):
-						self.sendMessage(chat_id=chat_id
-							,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
-							)
-					elif message == RU_LANG_BUTTON:
-						self.subscribers[chat_id][0] = "RU"
-						self.saveSubscribers()
-						self.sendMessage(chat_id=chat_id
-							,text="Сообщения бота будут отображаться на русском языке."
-							)
-					elif message == EN_LANG_BUTTON:
-						self.subscribers[chat_id][0] = "EN"
-						self.saveSubscribers()
-						self.sendMessage(chat_id=chat_id
-							,text="Bot messages will be shown in English."
-							)
-					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
-						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
-						self.sendMessage(chat_id=chat_id
-							,text=str(result)
-							)
+			# try:
+			if message:
+				if message == "/start":
+					self.sendMessage(chat_id=chat_id
+						,text=self.languageSupport(chat_id,START_MESSAGE)
+						)
+				elif message == "/help" or message == self.languageSupport(chat_id,HELP_BUTTON):
+					self.sendMessage(chat_id=chat_id
+						,text=self.languageSupport(chat_id,HELP_MESSAGE)
+						)
+				elif message == "/about" or message == self.languageSupport(chat_id,ABOUT_BUTTON):
+					self.sendMessage(chat_id=chat_id
+						,text=self.languageSupport(chat_id,ABOUT_MESSAGE)
+						)
+				elif message == "/rate" or message == self.languageSupport(chat_id,RATE_ME_BUTTON):
+					self.sendMessage(chat_id=chat_id
+						,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
+						)
+				elif message == RU_LANG_BUTTON:
+					self.subscribers[chat_id][0] = "RU"
+					self.saveSubscribers()
+					self.sendMessage(chat_id=chat_id
+						,text="Сообщения бота будут отображаться на русском языке."
+						)
+				elif message == EN_LANG_BUTTON:
+					self.subscribers[chat_id][0] = "EN"
+					self.saveSubscribers()
+					self.sendMessage(chat_id=chat_id
+						,text="Bot messages will be shown in English."
+						)
+				elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
+					result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
+					self.sendMessage(chat_id=chat_id
+						,text=str(result)
+						)
+				else:
+					parse = message.split(" ")
+
+					if parse[0].lower() == 'graph':
+						#plot
+						parse.pop(0)
+						result = "Plotting"
+
+						def daterange(start_date, end_date):
+							'''
+							Generator returning dates in given range
+							'''
+							for n in range(int ((end_date - start_date).days)):
+								yield start_date + timedelta(n)
+
+						def create_plot(x,y,x_ticks=None):
+							fig, ax = plt.subplots()  # create figure & 1 axis
+							ax.plot(x,y,'k',x,y,'bo')
+							if x_ticks:
+								plt.xticks(x,x_ticks)
+							plt.xlabel('Date')
+							plt.ylabel('Rates')
+							plt.grid(True)
+							fig.autofmt_xdate(bottom=0.2, rotation=70, ha='right')
+							fig.savefig(TEMP_PLOT_IMAGE_FILE_PATH)
+							plt.close(fig)
+
+						def days_since_UNIX_era(Date):
+							return (Date - date(1970,1,1)).days
+
+
+						start_date = datetime.strptime(parse[2],"%Y-%m-%d").date()
+						end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
+
+						UNIX_dates = []
+						rates = []
+						text_dates = []
+						for DATE in daterange(start_date,end_date):
+							pass
+							data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
+							text_dates +=  [data['date'] ]
+							UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
+							rates += [data['rate']]
+
+						print(text_dates)#debug
+						print(UNIX_dates)#debug
+						print(rates)#debug
+
+						create_plot(UNIX_dates,rates,text_dates)
+
+						with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
+							self.sendPic(chat_id=chat_id,pic=pic)
+
+						result = ""
+
 					else:
-						parse = message.split(" ")
-						result = self.FixerIO_GetData(parse)
+						#user asks for one rate
 
 						if not ( len(parse) == 3 or len(parse) == 4) or not is_number(parse[0]):
 							result = self.languageSupport(chat_id,INVALID_FORMAT_MESSAGE)
 						else:
+							result = self.getData(parse,chat_id=chat_id)
 
-							if "Invalid base" in result:
-								result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
-							elif "No Result" in result:
-								result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
-							else:
+							if isinstance(result,str):
 								pass
-								# result = self.FixerIO_GetData(parse)
+							elif isinstance(result, dict):
+								result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) 
+							else:
+								result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
 
-						self.sendMessage(chat_id=chat_id
-							,text=str(result)
-							)
-			except Exception as e:
-				logging.error("Message processing failed! Error: " + str(e))
+					self.sendMessage(chat_id=chat_id
+						,text=str(result)
+						)
+			# except Exception as e:
+			# 	logging.error("Message processing failed! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 
 			# Updates global offset to get the new updates
 			self.LAST_UPDATE_ID = update.update_id + 1
