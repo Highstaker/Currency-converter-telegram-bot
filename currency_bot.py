@@ -10,7 +10,7 @@
 #-put graph-getting into a separate process to prevent bot chunking
 #-prevent bot from getting messages from a user while it processes graph
 
-VERSION_NUMBER = (0,6,1)
+VERSION_NUMBER = (0,6,2)
 
 import logging
 import telegram
@@ -59,6 +59,7 @@ CURRENCY_NAMES = {
 	,"CHF": "Swiss Franc"
 	,"CAD": "Canadian Dollar"
 	,"ZAR":	"South African rand"
+	,"SGD": ""
 }
 
 #A filename of a file containing a token.
@@ -114,6 +115,10 @@ _99.50 USD EUR_
 _99.50 USD EUR 2012-09-06_
 
 Чтобы увидеть список валют, доступных для конвертации, и их обозначений, нажмите кнопку \"''' + CURRENCY_LIST_BUTTON["RU"] + '''\".
+
+Также можно отобразить график динамики курса валют. К примеру, чтобы увидеть график динамики курса доллара по отношению к евро в период с 25 сентября по 7 октября 2014 года, введите:
+_graph USD EUR 2014-09-25 2014-10-07_
+
 '''
 }
 
@@ -436,7 +441,7 @@ class TelegramBot():
 								'''
 								Generator returning dates in given range
 								'''
-								for n in range(int ((end_date - start_date).days)):
+								for n in range(int ((end_date - start_date).days) +1):
 									yield start_date + timedelta(n)
 
 							def create_plot(x,y,x_ticks=None,Title=""):
@@ -473,28 +478,34 @@ class TelegramBot():
 							UNIX_dates = []
 							rates = []
 							text_dates = []
-							for DATE in daterange(start_date,end_date):
-								pass
-								data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
-								text_dates +=  [data['date'] ]
-								UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
-								rates += [data['rate']]
 
-							text_dates = rm_doubles(text_dates)
-							UNIX_dates = rm_doubles(UNIX_dates)
-							rates = rm_doubles(rates)
+							date_range = daterange(start_date,end_date)
+
+							try:
+								for DATE in date_range:
+									pass
+									data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
+									text_dates += [ data['date'] ]
+									UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
+									rates += [data['rate']]
+
+								text_dates = rm_doubles(text_dates)
+								UNIX_dates = rm_doubles(UNIX_dates)
+								rates = rm_doubles(rates)
 
 
-							print(text_dates)#debug
-							print(UNIX_dates)#debug
-							print(rates)#debug
+								print(text_dates)#debug
+								print(UNIX_dates)#debug
+								print(rates)#debug
 
-							create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
+								create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
 
-							with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-								self.sendPic(chat_id=chat_id,pic=pic)
+								with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
+									self.sendPic(chat_id=chat_id,pic=pic)
 
-							result = ""
+								result = ""
+							except Exception as e:
+								result = "Error! Could not draw graph."
 
 					else:
 						#user asks for one rate
