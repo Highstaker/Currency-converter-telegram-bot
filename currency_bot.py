@@ -4,8 +4,13 @@
 #-Add more sources. ECB is not sufficient
 #+Graphs/charts over days
 #-error handling in graphs
+#-don't forget to turn the try back on in echo()
+#+remove doubles from a list of graph points
+#-limits the number of points on the graph, to prevent too many queries.
+#-put graph-getting into a separate process to prevent bot chunking
+#-prevent bot from getting messages from a user while it processes graph
 
-VERSION_NUMBER = (0,6,0)
+VERSION_NUMBER = (0,6,1)
 
 import logging
 import telegram
@@ -92,6 +97,9 @@ For example, to convert 99 U.S. Dollars 50 cents to Euros using a rate of Septem
 _99.50 USD EUR 2012-09-06_
 
 To see a list of available currencies and their codes, press the \"''' + CURRENCY_LIST_BUTTON["EN"] + '''\" button.
+
+Additionally, you may request a chart showing rates for a currency pair in a certain range of dates. For example, to see the graph for USD/EUR pair between September 25 and October 7, 2014, type:
+_graph USD EUR 2014-09-25 2014-10-07_
 '''
 ,"RU":'''
 Этот бот конвертирует валюты.
@@ -412,59 +420,81 @@ class TelegramBot():
 						,text=str(result)
 						)
 				else:
-					parse = message.split(" ")
+					#Parse the message into a list, separating with spaces and deleting the empties(they may appear if you type several consecutive spaces)
+					parse = [i for i in message.split(" ") if i]
 
 					if parse[0].lower() == 'graph':
 						#plot
 						parse.pop(0)
 						result = "Plotting"
 
-						def daterange(start_date, end_date):
-							'''
-							Generator returning dates in given range
-							'''
-							for n in range(int ((end_date - start_date).days)):
-								yield start_date + timedelta(n)
+						if len(parse) != 4:
+							result = "Invalid format!"
+						else:
 
-						def create_plot(x,y,x_ticks=None):
-							fig, ax = plt.subplots()  # create figure & 1 axis
-							ax.plot(x,y,'k',x,y,'bo')
-							if x_ticks:
-								plt.xticks(x,x_ticks)
-							plt.xlabel('Date')
-							plt.ylabel('Rates')
-							plt.grid(True)
-							fig.autofmt_xdate(bottom=0.2, rotation=70, ha='right')
-							fig.savefig(TEMP_PLOT_IMAGE_FILE_PATH)
-							plt.close(fig)
+							def daterange(start_date, end_date):
+								'''
+								Generator returning dates in given range
+								'''
+								for n in range(int ((end_date - start_date).days)):
+									yield start_date + timedelta(n)
 
-						def days_since_UNIX_era(Date):
-							return (Date - date(1970,1,1)).days
+							def create_plot(x,y,x_ticks=None,Title=""):
+								fig, ax = plt.subplots()  # create figure & 1 axis
+								ax.plot(x,y,'k',x,y,'bo')
+								if x_ticks:
+									plt.xticks(x,x_ticks)
+								plt.title(Title)
+								plt.xlabel('Date')
+								plt.ylabel('Rates')
+								plt.grid(True)
+								fig.autofmt_xdate(bottom=0.2, rotation=70, ha='right')
+								fig.savefig(TEMP_PLOT_IMAGE_FILE_PATH)
+								plt.close(fig)
+
+							def days_since_UNIX_era(Date):
+								'''
+								Returns the amount of days that have passed since the start of UNIX era on a given day
+								'''
+								return (Date - date(1970,1,1)).days
+
+							def rm_doubles(seq):
+								'''
+								Remove duplicates from list,preserving order
+								'''
+								seen = set()
+								seen_add = seen.add
+								return [ x for x in seq if not (x in seen or seen_add(x))]
 
 
-						start_date = datetime.strptime(parse[2],"%Y-%m-%d").date()
-						end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
+							start_date = datetime.strptime(parse[2],"%Y-%m-%d").date()
+							end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
 
-						UNIX_dates = []
-						rates = []
-						text_dates = []
-						for DATE in daterange(start_date,end_date):
-							pass
-							data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
-							text_dates +=  [data['date'] ]
-							UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
-							rates += [data['rate']]
+							UNIX_dates = []
+							rates = []
+							text_dates = []
+							for DATE in daterange(start_date,end_date):
+								pass
+								data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
+								text_dates +=  [data['date'] ]
+								UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
+								rates += [data['rate']]
 
-						print(text_dates)#debug
-						print(UNIX_dates)#debug
-						print(rates)#debug
+							text_dates = rm_doubles(text_dates)
+							UNIX_dates = rm_doubles(UNIX_dates)
+							rates = rm_doubles(rates)
 
-						create_plot(UNIX_dates,rates,text_dates)
 
-						with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-							self.sendPic(chat_id=chat_id,pic=pic)
+							print(text_dates)#debug
+							print(UNIX_dates)#debug
+							print(rates)#debug
 
-						result = ""
+							create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
+
+							with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
+								self.sendPic(chat_id=chat_id,pic=pic)
+
+							result = ""
 
 					else:
 						#user asks for one rate
