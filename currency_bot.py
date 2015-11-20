@@ -3,12 +3,13 @@
 #TODO
 #-Add more sources. ECB is not sufficient
 #+Graphs/charts over days
-#-error handling in graphs
+#+error handling in graphs
 #-don't forget to turn the try back on in echo()
 #+remove doubles from a list of graph points
-#-limits the number of points on the graph, to prevent too many queries.
+#+limit the number of points on the graph, to prevent too many queries.
 #-put graph-getting into a separate process to prevent bot chunking
 #-prevent bot from getting messages from a user while it processes graph
+#-custom bookmarks
 
 VERSION_NUMBER = (0,6,4)
 
@@ -562,7 +563,8 @@ class TelegramBot():
 
 										result = ""
 									except Exception as e:
-										result = "Error! Could not draw graph: " + str(e)
+										logging.error("Error! Could not draw graph: " + str(e))
+										result = "Error! Could not draw graph!"
 
 					else:
 						#user asks for one rate
