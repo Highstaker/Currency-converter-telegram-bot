@@ -10,7 +10,7 @@
 #-put graph-getting into a separate process to prevent bot chunking
 #-prevent bot from getting messages from a user while it processes graph
 
-VERSION_NUMBER = (0,6,3)
+VERSION_NUMBER = (0,6,4)
 
 import logging
 import telegram
@@ -430,21 +430,25 @@ class TelegramBot():
 					#Parse the message into a list, separating with spaces and deleting the empties(they may appear if you type several consecutive spaces)
 					parse = [i for i in message.split(" ") if i]
 
-					if parse[0].lower() == 'graph':
+					if parse[0].lower() in ['graph','g']:
 						#plot
 						parse.pop(0)
 						result = "Plotting"
 
-						if len(parse) != 4:
+						if len(parse) < 2 or len(parse) > 5:
 							result = "Invalid format!"
 						else:
 
-							def daterange(start_date, end_date):
+							def daterange(start_date, end_date, only_days=[0,1,2,3,4,5,6]):
 								'''
-								Generator returning dates in given range
+								Returns dates in given range. May be set up to return only certain days of week (specified in `only_days`, Monday is 0, Sunday is 6).
 								'''
+								daterange = []
 								for n in range(int ((end_date - start_date).days) +1):
-									yield start_date + timedelta(n)
+									date = start_date + timedelta(n)
+									if date.weekday() in only_days:
+										daterange += [date]
+								return daterange
 
 							def create_plot(x,y,x_ticks=None,Title=""):
 								fig, ax = plt.subplots()  # create figure & 1 axis
@@ -483,52 +487,82 @@ class TelegramBot():
 										else:
 											seq_new.append(x)
 											seen_add(x)
-									print("rm_indexes",rm_indexes)
+									# print("rm_indexes",rm_indexes)#debug
 									rm_indexes.sort(reverse=True)
 									for i in rm_indexes:
 										respective_seq.pop(i)
 									return seq_new, respective_seq
 
 							try:
-								start_date = datetime.strptime(parse[2],"%Y-%m-%d").date()
-								end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
+								if len(parse) > 3:
+									end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
+								else:
+									end_date = date.today()
 							except:
 								result = "Invalid date format!"
 							else:
-								UNIX_dates = []
-								rates = []
-								text_dates = []
-
-								date_range = list(daterange(start_date,end_date))
-
-								while len(date_range)>MAXIMUM_DOTS_PER_CHART:
-									#remove every second entry until the range is smaller than the maximum
-									date_range = date_range[::2]
-
 								try:
-									for DATE in date_range:
-										pass
-										data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
-										text_dates += [ data['date'] ]
-										UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'] , "%Y-%m-%d").date())]
-										rates += [data['rate']]
+									if parse[2] == "1m":
+										start_date = end_date - timedelta(weeks=4)
+										date_range = daterange(start_date,end_date,only_days=[0,1,2,3,4])
+									elif parse[2] == "3m":
+										start_date = end_date - timedelta(weeks=12)
+										date_range = daterange(start_date,end_date,only_days=[0,4])
+									elif parse[2] == "6m":
+										start_date = end_date - timedelta(weeks=24)
+										date_range = daterange(start_date,end_date,only_days=[0])
+									elif parse[2] in ["1y","12m"]:
+										start_date = end_date - timedelta(weeks=49)
+										date_range = daterange(start_date,end_date,only_days=[0])
+										date_range = date_range[::2]
+									elif parse[2] in ["2y","24m"]:
+										start_date = end_date - timedelta(weeks=97)
+										date_range = daterange(start_date,end_date,only_days=[0])
+										date_range = date_range[::4]
+									else:
+										raise Exception('Wrong daterange parameter')
 
-									text_dates = rm_doubles(text_dates)
-									UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
-
-
-									print(text_dates)#debug
-									print(UNIX_dates)#debug
-									print(rates)#debug
-
-									create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
-
-									with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-										self.sendPic(chat_id=chat_id,pic=pic)
-
-									result = ""
 								except Exception as e:
-									result = "Error! Could not draw graph: " + str(e)
+									if str(e) == 'Wrong daterange parameter':
+										result = "wrong daterange parameter!"
+									else:
+										logging.error("Daterange error: " + str(e))
+										result = "Unknown error"
+								else:
+									#got a parameter right, drawing
+									UNIX_dates = []
+									rates = []
+									text_dates = []
+
+									print("date_range",date_range)#debug
+
+									# while len(date_range)>MAXIMUM_DOTS_PER_CHART:
+									# 	#remove every second entry until the range is smaller than the maximum
+									# 	date_range = date_range[::2]
+
+									try:
+										for DATE in date_range:
+											data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
+											text_dates += [ data['date'] ]
+											UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'], "%Y-%m-%d").date())]
+											rates += [data['rate']]
+
+										text_dates = rm_doubles(text_dates)
+										UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
+
+
+										# print(text_dates)#debug
+										# print(UNIX_dates)#debug
+										# print(rates)#debug
+
+										create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
+
+										with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
+											self.sendPic(chat_id=chat_id,pic=pic)
+
+										result = ""
+									except Exception as e:
+										result = "Error! Could not draw graph: " + str(e)
 
 					else:
 						#user asks for one rate
