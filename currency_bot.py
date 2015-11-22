@@ -11,7 +11,7 @@
 #+prevent bot from getting messages from a user while it processes graph
 #-custom bookmarks
 
-VERSION_NUMBER = (0,6,5)
+VERSION_NUMBER = (0,6,6)
 
 import random
 import logging
@@ -422,6 +422,9 @@ class TelegramBot():
 				return daterange
 
 			def create_plot(x,y,x_ticks=None,Title=""):
+				import matplotlib
+				# Force matplotlib to not use any Xwindows backend.
+				matplotlib.use('Agg')
 				import matplotlib.pyplot as plt
 				fig, ax = plt.subplots()  # create figure & 1 axis
 				ax.plot(x,y,'k',x,y,'bo')
