@@ -7,12 +7,13 @@
 #-don't forget to turn the try back on in echo()
 #+remove doubles from a list of graph points
 #+limit the number of points on the graph, to prevent too many queries.
-#-put graph-getting into a separate process to prevent bot chunking
-#-prevent bot from getting messages from a user while it processes graph
+#+put graph-getting into a separate process to prevent bot chunking
+#+prevent bot from getting messages from a user while it processes graph
 #-custom bookmarks
 
-VERSION_NUMBER = (0,6,4)
+VERSION_NUMBER = (0,6,5)
 
+import random
 import logging
 import telegram
 from time import time
@@ -25,7 +26,8 @@ from bs4 import BeautifulSoup #HTML parser
 import re
 import json
 from datetime import date, timedelta, datetime
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+from multiprocessing import Process, Queue, Lock
 
 from webpage_reader import getHTML_specifyEncoding
 
@@ -40,7 +42,7 @@ logging.basicConfig(format = u'[%(asctime)s] %(filename)s[LINE:%(lineno)d]# %(le
 ##PARAMETERS
 ############
 
-TEMP_PLOT_IMAGE_FILE_PATH = '/tmp/001.png'
+TEMP_PLOT_IMAGE_FILE_PATH = '/tmp/'
 
 MAXIMUM_DOTS_PER_CHART = 30
 
@@ -218,6 +220,9 @@ class TelegramBot():
 	#{chat_id: ["EN",]}
 	subscribers = {}
 
+	#dictionary containing process and queue id for graph-plotting processes
+	graph_processes = {}
+
 	def __init__(self, token):
 		super(TelegramBot, self).__init__()
 		self.bot = telegram.Bot(token)
@@ -374,11 +379,174 @@ class TelegramBot():
 
 		return result
 
+	def graph_plotting_process(self,chat_id,q,parse):
+		'''
+		A process that plots a graph
+		'''
+		if len(parse) < 2 or len(parse) > 5:
+			result = "Invalid format!"
+		else:
+
+			def daterange(start_date, end_date, only_days=[0,1,2,3,4,5,6]):
+				'''
+				Returns dates in given range. May be set up to return only certain days of week (specified in `only_days`, Monday is 0, Sunday is 6).
+				'''
+				daterange = []
+				for n in range(int ((end_date - start_date).days) +1):
+					date = start_date + timedelta(n)
+					if date.weekday() in only_days:
+						daterange += [date]
+				return daterange
+
+			def create_plot(x,y,x_ticks=None,Title=""):
+				import matplotlib.pyplot as plt
+				fig, ax = plt.subplots()  # create figure & 1 axis
+				ax.plot(x,y,'k',x,y,'bo')
+				if x_ticks:
+					plt.xticks(x,x_ticks)
+				plt.title(Title)
+				plt.xlabel('Date')
+				plt.ylabel('Rates')
+				plt.grid(True)
+				fig.autofmt_xdate(bottom=0.2, rotation=70, ha='right')
+				savefilename = path.join(TEMP_PLOT_IMAGE_FILE_PATH, hex(random.getrandbits(128) )[2:] + ".png" )
+				fig.savefig( savefilename )
+				plt.close(fig)
+				return savefilename
+
+			def days_since_UNIX_era(Date):
+				'''
+				Returns the amount of days that have passed since the start of UNIX era on a given day
+				'''
+				return (Date - date(1970,1,1)).days
+
+			def rm_doubles(seq,respective_seq=None):
+				'''
+				Remove duplicates from list,preserving order.
+				If respective_seq is specified, the indicies respective to the ones removed from seq will be removed from respective_seq as well.
+				'''
+				seen = set()
+				seen_add = seen.add
+				if not respective_seq:
+					return [ x for x in seq if not (x in seen or seen_add(x))]
+				else:
+					rm_indexes = []
+					seq_new = []
+					for n,x in enumerate(seq):
+						if x in seen:
+							rm_indexes.append(n)
+						else:
+							seq_new.append(x)
+							seen_add(x)
+					# print("rm_indexes",rm_indexes)#debug
+					rm_indexes.sort(reverse=True)
+					for i in rm_indexes:
+						respective_seq.pop(i)
+					return seq_new, respective_seq
+
+			try:
+				if len(parse) > 3:
+					end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
+				else:
+					end_date = date.today()
+			except:
+				result = "Invalid date format!"
+			else:
+				try:
+					if parse[2] == "1m":
+						start_date = end_date - timedelta(weeks=4)
+						date_range = daterange(start_date,end_date,only_days=[0,1,2,3,4])
+					elif parse[2] == "3m":
+						start_date = end_date - timedelta(weeks=12)
+						date_range = daterange(start_date,end_date,only_days=[0,4])
+					elif parse[2] == "6m":
+						start_date = end_date - timedelta(weeks=24)
+						date_range = daterange(start_date,end_date,only_days=[0])
+					elif parse[2] in ["1y","12m"]:
+						start_date = end_date - timedelta(weeks=49)
+						date_range = daterange(start_date,end_date,only_days=[0])
+						date_range = date_range[::2]
+					elif parse[2] in ["2y","24m"]:
+						start_date = end_date - timedelta(weeks=97)
+						date_range = daterange(start_date,end_date,only_days=[0])
+						date_range = date_range[::4]
+					else:
+						raise Exception('Wrong daterange parameter')
+
+				except Exception as e:
+					if str(e) == 'Wrong daterange parameter':
+						result = "wrong daterange parameter!"
+					else:
+						logging.error("Daterange error: " + str(e))
+						result = "Unknown error"
+				else:
+					#got a parameter right, drawing
+					UNIX_dates = []
+					rates = []
+					text_dates = []
+
+					print("date_range",date_range)#debug
+
+					# while len(date_range)>MAXIMUM_DOTS_PER_CHART:
+					# 	#remove every second entry until the range is smaller than the maximum
+					# 	date_range = date_range[::2]
+
+					try:
+						for DATE in date_range:
+							data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
+							text_dates += [ data['date'] ]
+							UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'], "%Y-%m-%d").date())]
+							rates += [data['rate']]
+
+						text_dates = rm_doubles(text_dates)
+						UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
+
+
+						# print(text_dates)#debug
+						# print(UNIX_dates)#debug
+						# print(rates)#debug
+
+						save_filename = create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
+
+						# with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
+						# 	self.sendPic(chat_id=chat_id,pic=pic)
+
+						result = "send_pic"
+
+
+					except Exception as e:
+						logging.error("Error! Could not draw graph: " + str(e))
+						result = "Error! Could not draw graph!"
+
+		try:
+			q.put( (result,save_filename) )
+		except UnboundLocalError:
+			q.put( (result,) )
+
+
 	def echo(self):
 		bot = self.bot
 
 		updates = self.getUpdates()
 
+		#send messages generated by terminated graph-plotting processes and clean the database
+		tempUser = dict(self.graph_processes) #because error occurs if dictionary change size during loop
+		for user in tempUser:
+			if not self.graph_processes[user][0].is_alive():
+				#proc_result is a tuple of ('send_pic',file_path) if the process successfully generated a chart, and a one-element tuple with result message to be shown if it failed.
+				proc_result = self.graph_processes[user][1].get()
+				print("proc_result",proc_result)
+				if proc_result[0] == "send_pic":
+					with open(proc_result[1],'rb') as pic:
+						self.sendPic(chat_id=user,pic=pic)
+					os.remove(proc_result[1])#I don't need a graph once it is sent. Delete the temporary file
+				else:
+					self.sendMessage(chat_id=user,text=str(proc_result[0]))
+				logging.warning('deleting graph process for user ' + str(user))
+				del self.graph_processes[user]
+		del tempUser #freeing memory
+
+		#main message processing routine
 		for update in updates:
 			chat_id = update.message.chat_id
 			Message = update.message
@@ -392,200 +560,81 @@ class TelegramBot():
 			except KeyError:
 				self.subscribers[chat_id] = ["EN"]
 
-			# try:
-			if message:
-				if message == "/start":
-					self.sendMessage(chat_id=chat_id
-						,text=self.languageSupport(chat_id,START_MESSAGE)
-						)
-				elif message == "/help" or message == self.languageSupport(chat_id,HELP_BUTTON):
-					self.sendMessage(chat_id=chat_id
-						,text=self.languageSupport(chat_id,HELP_MESSAGE)
-						)
-				elif message == "/about" or message == self.languageSupport(chat_id,ABOUT_BUTTON):
-					self.sendMessage(chat_id=chat_id
-						,text=self.languageSupport(chat_id,ABOUT_MESSAGE)
-						)
-				elif message == "/rate" or message == self.languageSupport(chat_id,RATE_ME_BUTTON):
-					self.sendMessage(chat_id=chat_id
-						,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
-						)
-				elif message == RU_LANG_BUTTON:
-					self.subscribers[chat_id][0] = "RU"
-					self.saveSubscribers()
-					self.sendMessage(chat_id=chat_id
-						,text="Сообщения бота будут отображаться на русском языке."
-						)
-				elif message == EN_LANG_BUTTON:
-					self.subscribers[chat_id][0] = "EN"
-					self.saveSubscribers()
-					self.sendMessage(chat_id=chat_id
-						,text="Bot messages will be shown in English."
-						)
-				elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
-					result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
-					self.sendMessage(chat_id=chat_id
-						,text=str(result)
-						)
-				else:
-					#Parse the message into a list, separating with spaces and deleting the empties(they may appear if you type several consecutive spaces)
-					parse = [i for i in message.split(" ") if i]
+			try:
+				if message:
+					if message == "/start":
+						self.sendMessage(chat_id=chat_id
+							,text=self.languageSupport(chat_id,START_MESSAGE)
+							)
+					elif message == "/help" or message == self.languageSupport(chat_id,HELP_BUTTON):
+						self.sendMessage(chat_id=chat_id
+							,text=self.languageSupport(chat_id,HELP_MESSAGE)
+							)
+					elif message == "/about" or message == self.languageSupport(chat_id,ABOUT_BUTTON):
+						self.sendMessage(chat_id=chat_id
+							,text=self.languageSupport(chat_id,ABOUT_MESSAGE)
+							)
+					elif message == "/rate" or message == self.languageSupport(chat_id,RATE_ME_BUTTON):
+						self.sendMessage(chat_id=chat_id
+							,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
+							)
+					elif message == RU_LANG_BUTTON:
+						self.subscribers[chat_id][0] = "RU"
+						self.saveSubscribers()
+						self.sendMessage(chat_id=chat_id
+							,text="Сообщения бота будут отображаться на русском языке."
+							)
+					elif message == EN_LANG_BUTTON:
+						self.subscribers[chat_id][0] = "EN"
+						self.saveSubscribers()
+						self.sendMessage(chat_id=chat_id
+							,text="Bot messages will be shown in English."
+							)
+					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
+						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
+						self.sendMessage(chat_id=chat_id
+							,text=str(result)
+							)
+					else:
+						#Parse the message into a list, separating with spaces and deleting the empties(they may appear if you type several consecutive spaces)
+						parse = [i for i in message.split(" ") if i]
 
-					if parse[0].lower() in ['graph','g']:
-						#plot
-						parse.pop(0)
-						result = "Plotting"
-
-						if len(parse) < 2 or len(parse) > 5:
-							result = "Invalid format!"
-						else:
-
-							def daterange(start_date, end_date, only_days=[0,1,2,3,4,5,6]):
-								'''
-								Returns dates in given range. May be set up to return only certain days of week (specified in `only_days`, Monday is 0, Sunday is 6).
-								'''
-								daterange = []
-								for n in range(int ((end_date - start_date).days) +1):
-									date = start_date + timedelta(n)
-									if date.weekday() in only_days:
-										daterange += [date]
-								return daterange
-
-							def create_plot(x,y,x_ticks=None,Title=""):
-								fig, ax = plt.subplots()  # create figure & 1 axis
-								ax.plot(x,y,'k',x,y,'bo')
-								if x_ticks:
-									plt.xticks(x,x_ticks)
-								plt.title(Title)
-								plt.xlabel('Date')
-								plt.ylabel('Rates')
-								plt.grid(True)
-								fig.autofmt_xdate(bottom=0.2, rotation=70, ha='right')
-								fig.savefig(TEMP_PLOT_IMAGE_FILE_PATH)
-								plt.close(fig)
-
-							def days_since_UNIX_era(Date):
-								'''
-								Returns the amount of days that have passed since the start of UNIX era on a given day
-								'''
-								return (Date - date(1970,1,1)).days
-
-							def rm_doubles(seq,respective_seq=None):
-								'''
-								Remove duplicates from list,preserving order.
-								If respective_seq is specified, the indicies respective to the ones removed from seq will be removed from respective_seq as well.
-								'''
-								seen = set()
-								seen_add = seen.add
-								if not respective_seq:
-									return [ x for x in seq if not (x in seen or seen_add(x))]
-								else:
-									rm_indexes = []
-									seq_new = []
-									for n,x in enumerate(seq):
-										if x in seen:
-											rm_indexes.append(n)
-										else:
-											seq_new.append(x)
-											seen_add(x)
-									# print("rm_indexes",rm_indexes)#debug
-									rm_indexes.sort(reverse=True)
-									for i in rm_indexes:
-										respective_seq.pop(i)
-									return seq_new, respective_seq
+						if parse[0].lower() in ['graph','g']:
+							#plot
+							parse.pop(0)
 
 							try:
-								if len(parse) > 3:
-									end_date = datetime.strptime(parse[3],"%Y-%m-%d").date()
-								else:
-									end_date = date.today()
-							except:
-								result = "Invalid date format!"
-							else:
-								try:
-									if parse[2] == "1m":
-										start_date = end_date - timedelta(weeks=4)
-										date_range = daterange(start_date,end_date,only_days=[0,1,2,3,4])
-									elif parse[2] == "3m":
-										start_date = end_date - timedelta(weeks=12)
-										date_range = daterange(start_date,end_date,only_days=[0,4])
-									elif parse[2] == "6m":
-										start_date = end_date - timedelta(weeks=24)
-										date_range = daterange(start_date,end_date,only_days=[0])
-									elif parse[2] in ["1y","12m"]:
-										start_date = end_date - timedelta(weeks=49)
-										date_range = daterange(start_date,end_date,only_days=[0])
-										date_range = date_range[::2]
-									elif parse[2] in ["2y","24m"]:
-										start_date = end_date - timedelta(weeks=97)
-										date_range = daterange(start_date,end_date,only_days=[0])
-										date_range = date_range[::4]
-									else:
-										raise Exception('Wrong daterange parameter')
+								if self.graph_processes[chat_id][0].is_alive():
+									self.sendMessage(chat_id=chat_id
+										,text="Your previous chart query is still being processed. Please wait for the processing to finish before sending another one!"
+										)
 
-								except Exception as e:
-									if str(e) == 'Wrong daterange parameter':
-										result = "wrong daterange parameter!"
-									else:
-										logging.error("Daterange error: " + str(e))
-										result = "Unknown error"
-								else:
-									#got a parameter right, drawing
-									UNIX_dates = []
-									rates = []
-									text_dates = []
-
-									print("date_range",date_range)#debug
-
-									# while len(date_range)>MAXIMUM_DOTS_PER_CHART:
-									# 	#remove every second entry until the range is smaller than the maximum
-									# 	date_range = date_range[::2]
-
-									try:
-										for DATE in date_range:
-											data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
-											text_dates += [ data['date'] ]
-											UNIX_dates += [days_since_UNIX_era(datetime.strptime( data['date'], "%Y-%m-%d").date())]
-											rates += [data['rate']]
-
-										text_dates = rm_doubles(text_dates)
-										UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
-
-
-										# print(text_dates)#debug
-										# print(UNIX_dates)#debug
-										# print(rates)#debug
-
-										create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
-
-										with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-											self.sendPic(chat_id=chat_id,pic=pic)
-
-										result = ""
-									except Exception as e:
-										logging.error("Error! Could not draw graph: " + str(e))
-										result = "Error! Could not draw graph!"
-
-					else:
-						#user asks for one rate
-
-						if not ( len(parse) == 3 or len(parse) == 4) or not is_number(parse[0]):
-							result = self.languageSupport(chat_id,INVALID_FORMAT_MESSAGE)
+							except KeyError:
+								q = Queue()
+								p = Process(target=self.graph_plotting_process, args=(chat_id,q,parse,))
+								self.graph_processes[chat_id]=(p,q)
+								p.start()
+							
 						else:
-							result = self.getData(parse,chat_id=chat_id)
+							#user asks for one rate
 
-							if isinstance(result,str):
-								pass
-							elif isinstance(result, dict):
-								result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) 
+							if not ( len(parse) == 3 or len(parse) == 4) or not is_number(parse[0]):
+								result = self.languageSupport(chat_id,INVALID_FORMAT_MESSAGE)
 							else:
-								result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
+								result = self.getData(parse,chat_id=chat_id)
 
-					self.sendMessage(chat_id=chat_id
-						,text=str(result)
-						)
-			# except Exception as e:
-			# 	logging.error("Message processing failed! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
+								if isinstance(result,str):
+									pass
+								elif isinstance(result, dict):
+									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) 
+								else:
+									result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
+
+							self.sendMessage(chat_id=chat_id
+								,text=str(result)
+								)
+			except Exception as e:
+				logging.error("Message processing failed! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 
 			# Updates global offset to get the new updates
 			self.LAST_UPDATE_ID = update.update_id + 1
