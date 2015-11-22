@@ -104,8 +104,20 @@ _99.50 USD EUR 2012-09-06_
 
 To see a list of available currencies and their codes, press the \"''' + CURRENCY_LIST_BUTTON["EN"] + '''\" button.
 
-Additionally, you may request a chart showing rates for a currency pair in a certain range of dates. For example, to see the graph for USD/EUR pair between September 25 and October 7, 2014, type:
-_graph USD EUR 2014-09-25 2014-10-07_
+You may request a chart showing rates for a currency pair in a certain range of dates. 
+To get a chart for EUR/USD pair for the previous 3 months, type:
+_g eur usd 3m_
+
+Available ranges are:
+*1m* - one month
+*3m* - three months
+*6m* - six months
+*1y* - one year
+*2y* - two years
+
+You may also request a chart with rates for a period before a certain date. For example, if you want rates for 3 months before May 9 2014, type:
+_g eur usd 3m 2014-05-09_
+
 '''
 ,"RU":'''
 Этот бот конвертирует валюты.
@@ -121,8 +133,19 @@ _99.50 USD EUR 2012-09-06_
 
 Чтобы увидеть список валют, доступных для конвертации, и их обозначений, нажмите кнопку \"''' + CURRENCY_LIST_BUTTON["RU"] + '''\".
 
-Также можно отобразить график динамики курса валют. К примеру, чтобы увидеть график динамики курса доллара по отношению к евро в период с 25 сентября по 7 октября 2014 года, введите:
-_graph USD EUR 2014-09-25 2014-10-07_
+Также можно отобразить график динамики курса валют. К примеру, чтобы увидеть график динамики курса доллара по отношению к евро за последние три месяца, введите:
+_g eur usd 3m_
+
+Доступные периоды:
+*1m* - один месяц
+*3m* - три месяца
+*6m* - шесть месяцев
+*1y* - один год
+*2y* - два года
+
+Можно также узнать котировки за период до определённой даты. Например, чтобы увидеть курс за 3 месяца до 9 мая 2014 года: введите
+_g eur usd 3m 2014-05-09_
+
 
 '''
 }
