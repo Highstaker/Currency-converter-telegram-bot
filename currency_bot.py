@@ -4,7 +4,7 @@
 #-Add more sources. ECB is not sufficient
 #-custom bookmarks
 
-VERSION_NUMBER = (0,6,6)
+VERSION_NUMBER = (0,7,0)
 
 import random
 import logging
@@ -65,6 +65,10 @@ TOKEN_FILENAME = 'token'
 
 #A path where subscribers list is saved.
 SUBSCRIBERS_BACKUP_FILE = 'omni_currency_bot_subscribers_bak.save'
+
+#A subscribers list assigned to a new user.
+#["EN",source]
+INITIAL_SUBSCRIBERS_LIST = ["EN",'FixerIO']
 
 #########
 ####BUTTONS
@@ -233,7 +237,7 @@ class TelegramBot():
 
 	LAST_UPDATE_ID = None
 
-	#{chat_id: ["EN",]}
+	#{chat_id: ["EN",source]}
 	subscribers = {}
 
 	#dictionary containing process and queue id for graph-plotting processes
@@ -267,6 +271,12 @@ class TelegramBot():
 		# print(result)
 		return result
 
+	def assignBotLanguage(self,chat_id,language):
+		'''
+		Assigns bot language to a subscribers list and saves to disk
+		'''
+		self.subscribers[chat_id][0] = language
+		self.saveSubscribers()
 
 	def loadSubscribers(self):
 		'''
@@ -365,35 +375,67 @@ class TelegramBot():
 
 		return result
 
+	def getData(self,parse,chat_id=None,source="FixerIO"):
+		'''
+		Universal data getter handling several sources
+		'''
+
+		result=""
+
+		if source=="FixerIO":
+			page = self.FixerIO_GetData(parse)
+			if 'error' in page.keys():
+				pass
+				if "Invalid base" in page['error']:
+					result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
+				else:
+					result = page['error']
+			else:
+				try:
+					rate = float(list(page['rates'].values())[0]) * float(parse[0])
+					date = page['date']
+					result = {'rate' : rate, 'date': date}
+				except IndexError:
+					result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
+		elif source=="CBRU":
+			pass
+
+		return result
 
 	def FixerIO_getCurrencyList(self):
+		'''
+		Gets list of currencies available from ECB.
+		'''
 		page = getHTML_specifyEncoding('https://api.fixer.io/latest')
 		result = list(json.loads(page)['rates'].keys() ) + [ json.loads(page)['base'] ]
 		result.sort()
 		result = [i.upper() for i in result]
 		return result
 
-	def getData(self,parse,chat_id=None):
+	def getCurrencyList(self,source="FixerIO"):
 		'''
-		Universal data getter handling several sources
+		Get list of currencies available from the given source
 		'''
 
-		page = self.FixerIO_GetData(parse)
-		if 'error' in page.keys():
+		result = ""
+
+		if source=="FixerIO":
+			result = self.FixerIO_getCurrencyList()
+		elif source=="CBRU":
 			pass
-			if "Invalid base" in page['error']:
-				result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
-			else:
-				result = page['error']
-		else:
-			try:
-				rate = float(list(page['rates'].values())[0]) * float(parse[0])
-				date = page['date']
-				result = {'rate' : rate, 'date': date}
-			except IndexError:
-				result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
 
 		return result
+
+	def setSource(self,chat_id,source):
+		'''
+		Sets the tates source for the current user
+		'''
+		if "ECB" in source:
+			self.subscribers[chat_id][1]= "FixerIO"
+		elif "CBRU" in source:
+			self.subscribers[chat_id][1]= "CBRU"
+		else:
+			pass
 
 	def graph_plotting_process(self,chat_id,q,parse):
 		'''
@@ -577,7 +619,7 @@ class TelegramBot():
 			try:
 				self.subscribers[chat_id]
 			except KeyError:
-				self.subscribers[chat_id] = ["EN"]
+				self.subscribers[chat_id] = INITIAL_SUBSCRIBERS_LIST
 
 			try:
 				if message:
@@ -598,19 +640,19 @@ class TelegramBot():
 							,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
 							)
 					elif message == RU_LANG_BUTTON:
-						self.subscribers[chat_id][0] = "RU"
-						self.saveSubscribers()
+						self.assignBotLanguage(chat_id,'RU')
 						self.sendMessage(chat_id=chat_id
 							,text="Сообщения бота будут отображаться на русском языке."
 							)
 					elif message == EN_LANG_BUTTON:
-						self.subscribers[chat_id][0] = "EN"
-						self.saveSubscribers()
+						self.assignBotLanguage(chat_id,'EN')
 						self.sendMessage(chat_id=chat_id
 							,text="Bot messages will be shown in English."
 							)
+					elif "Source:" in message:
+						self.setSource(message)
 					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
-						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
+						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList()] )
 						self.sendMessage(chat_id=chat_id
 							,text=str(result)
 							)
