@@ -4,7 +4,7 @@
 #-Add more sources. ECB is not sufficient
 #-custom bookmarks
 
-VERSION_NUMBER = (0,7,1)
+VERSION_NUMBER = (0,7,2)
 
 import random
 import logging
@@ -384,9 +384,22 @@ class TelegramBot():
 		'''
 		Gets currency data from Russian Central Bank
 		'''
+
+		def date_from_std_to_CBRU(date):
+			'''
+			Standard format (YYYY-MM-DD) to CBRU query format (DD/MM/YYYY)
+			'''
+			return "/".join(str(date).split("-")[::-1])
+
+		def date_from_CBRU_to_std(date):
+			'''
+			CBRU return format (DD.MM.YYYY) to Standard format (YYYY-MM-DD)
+			'''
+			return "-".join(str(date).replace("/",".").split(".")[::-1])
+
 		if not graph:
 			if len(parse)==4:
-				date="/".join(str(parse[3]).split("-")[::-1])
+				date = date_from_std_to_CBRU(parse[3])
 			else:
 				date = ""
 
@@ -409,7 +422,8 @@ class TelegramBot():
 
 				rate = Nominal * (value_from/nominal_from)/(value_to/nominal_to)
 
-				return {'rate':rate, 'date': page_root.attrib['Date']}
+				print("date_from_CBRU_to_std( page_root.attrib['Date'] ) ",date_from_CBRU_to_std( page_root.attrib['Date'] ) )#debug
+				return {'rate':rate, 'date': date_from_CBRU_to_std( page_root.attrib['Date'] )}
 			except IndexError:
 				return {'error': "Unknown error"}
 
@@ -607,12 +621,6 @@ class TelegramBot():
 					rates = []
 					text_dates = []
 
-					print("date_range",date_range)#debug
-
-					# while len(date_range)>MAXIMUM_DOTS_PER_CHART:
-					# 	#remove every second entry until the range is smaller than the maximum
-					# 	date_range = date_range[::2]
-
 					try:
 						for DATE in date_range:
 							data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
@@ -623,15 +631,7 @@ class TelegramBot():
 						text_dates = rm_doubles(text_dates)
 						UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
 
-
-						# print(text_dates)#debug
-						# print(UNIX_dates)#debug
-						# print(rates)#debug
-
 						save_filename = create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
-
-						# with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-						# 	self.sendPic(chat_id=chat_id,pic=pic)
 
 						result = "send_pic"
 
