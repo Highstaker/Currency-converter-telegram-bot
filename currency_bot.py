@@ -722,7 +722,7 @@ class TelegramBot():
 							,text=self.languageSupport(chat_id,{"EN":"Source is set to ","RU":"Иcточник установлен на "}) + message.replace("Source:","")
 							)
 					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
-						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList(chat_id)] )
+						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList(chat_id)] ) + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + "\n\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
 						self.sendMessage(chat_id=chat_id
 							,text=str(result)
 							)
@@ -757,7 +757,7 @@ class TelegramBot():
 								if isinstance(result,str):
 									pass
 								elif isinstance(result, dict):
-									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date'] + "\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE) ) 
+									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) + "\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
 								else:
 									result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
 
