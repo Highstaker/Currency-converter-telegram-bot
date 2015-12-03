@@ -114,6 +114,8 @@ Available ranges are:
 You may also request a chart with rates for a period before a certain date. For example, if you want rates for 3 months before May 9 2014, type:
 _g eur usd 3m 2014-05-09_
 
+You can choose a source of information by pressing a respective button.
+
 '''
 ,"RU":'''
 Этот бот конвертирует валюты.
@@ -142,7 +144,7 @@ _g eur usd 3m_
 Можно также узнать котировки за период до определённой даты. Например, чтобы увидеть курс за 3 месяца до 9 мая 2014 года: введите
 _g eur usd 3m 2014-05-09_
 
-
+Вы можете выбрать источник котировок, нажав на кнопку _Source: (источник)_
 '''
 }
 
