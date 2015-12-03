@@ -1,10 +1,9 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #TODO
-#-Add more sources. ECB is not sufficient
 #-custom bookmarks
 
-VERSION_NUMBER = (0,6,6)
+VERSION_NUMBER = (0,7,3)
 
 import random
 import logging
@@ -19,8 +18,8 @@ from bs4 import BeautifulSoup #HTML parser
 import re
 import json
 from datetime import date, timedelta, datetime
-# import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue, Lock
+import xml.etree.ElementTree as ET
 
 from webpage_reader import getHTML_specifyEncoding
 
@@ -58,6 +57,9 @@ CURRENCY_NAMES = {
 	,"CAD": {"EN":"Canadian Dollar","RU":"Канадский доллар"}
 	,"ZAR":	{"EN":"South African rand","RU":"Южноафриканский рэнд"}
 	,"SGD": {"EN":"Singaporean Dollar","RU":"Сингапурский доллар"}
+	,"UAH": {"EN": "Ukrainian hryvnia", "RU": "Украинсая гривна"}
+	,"BYR": {"EN": "Belarusian ruble", "RU": "Белорусский рубль"}
+	,"RON": {"EN": "Romanian leu" , "RU": "Румынский лей"}
 }
 
 #A filename of a file containing a token.
@@ -65,6 +67,10 @@ TOKEN_FILENAME = 'token'
 
 #A path where subscribers list is saved.
 SUBSCRIBERS_BACKUP_FILE = 'omni_currency_bot_subscribers_bak.save'
+
+#A subscribers list assigned to a new user.
+#["EN",source]
+INITIAL_SUBSCRIBERS_LIST = ["EN",'FixerIO']
 
 #########
 ####BUTTONS
@@ -111,6 +117,8 @@ Available ranges are:
 You may also request a chart with rates for a period before a certain date. For example, if you want rates for 3 months before May 9 2014, type:
 _g eur usd 3m 2014-05-09_
 
+You can choose a source of information by pressing a respective button.
+
 '''
 ,"RU":'''
 Этот бот конвертирует валюты.
@@ -139,7 +147,7 @@ _g eur usd 3m_
 Можно также узнать котировки за период до определённой даты. Например, чтобы увидеть курс за 3 месяца до 9 мая 2014 года: введите
 _g eur usd 3m 2014-05-09_
 
-
+Вы можете выбрать источник котировок, нажав на кнопку _Source: (источник)_
 '''
 }
 
@@ -151,7 +159,7 @@ Version: """ + ".".join([str(i) for i in VERSION_NUMBER]) + """
 
 This bot uses the [python-telegram-bot](https://github.com/leandrotoledo/python-telegram-bot) library.
 
-Rates are received from ECB
+Rates are received from European Central Bank or Central Bank of Russian Federation
 """
 ,"RU": """*Currency Converter Bot*
 _Автор:_ Highstaker a.k.a. OmniSable.
@@ -162,7 +170,7 @@ _Автор:_ Highstaker a.k.a. OmniSable.
 
 Этот бот написан на основе библиотеки [python-telegram-bot](https://github.com/leandrotoledo/python-telegram-bot).
 
-Данные о курсах валют берутся с портала Европейского Центробанка.
+Данные о курсах валют берутся с портала Европейского Центробанка или Центрального Банка РФ.
 """
 }
 
@@ -196,12 +204,23 @@ DATE_INCORRECT_MESSAGE  = {"EN":"Date is incorrect!", "RU": "Неверная д
 
 UNKNOWN_ERROR_MESSAGE = {"EN": "Unknown error!", "RU": "Неизвестная ошибка!"}
 
+RATES_ARE_TAKEN_FROM_MESSAGE = {"EN": "Rates are taken from: ", "RU": "Источник: "}
+
+ECB_MESSAGE ={"EN": 'European Central Bank', "RU": 'Европейский Центробанк'}
+
+CBRU_MESSAGE = {"EN": 'Central Bank of Russian Federation', "RU": "Центробанк РФ"}
+
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
 	for i in range(0, len(alist), max_size):
 		yield alist[i:i+max_size]
 
-MAIN_MENU_KEY_MARKUP = [[CURRENCY_LIST_BUTTON],[HELP_BUTTON,ABOUT_BUTTON,RATE_ME_BUTTON],[EN_LANG_BUTTON,RU_LANG_BUTTON]]
+MAIN_MENU_KEY_MARKUP = [
+[CURRENCY_LIST_BUTTON]
+,[HELP_BUTTON,ABOUT_BUTTON,RATE_ME_BUTTON]
+,[EN_LANG_BUTTON,RU_LANG_BUTTON]
+,["Source: ECB", "Source: CBRU"]
+]
 
 ################
 ###GLOBALS######
@@ -233,7 +252,7 @@ class TelegramBot():
 
 	LAST_UPDATE_ID = None
 
-	#{chat_id: ["EN",]}
+	#{chat_id: ["EN",source]}
 	subscribers = {}
 
 	#dictionary containing process and queue id for graph-plotting processes
@@ -267,6 +286,12 @@ class TelegramBot():
 		# print(result)
 		return result
 
+	def assignBotLanguage(self,chat_id,language):
+		'''
+		Assigns bot language to a subscribers list and saves to disk
+		'''
+		self.subscribers[chat_id][0] = language
+		self.saveSubscribers()
 
 	def loadSubscribers(self):
 		'''
@@ -353,7 +378,7 @@ class TelegramBot():
 			,method='replace')
 		if "Invalid base" in page:
 			result = {'error':"Invalid base"}
-			print("Invalid base")#debug
+			# print("Invalid base")#debug
 		elif "date too old" in page.lower():
 			result= {'error': self.languageSupport(chat_id,DATE_TOO_OLD_MESSAGE)}
 		elif "not found" in page.lower():
@@ -365,35 +390,137 @@ class TelegramBot():
 
 		return result
 
+	def CBRU_GetData(self,parse,chat_id=None,graph=False):
+		'''
+		Gets currency data from Russian Central Bank
+		'''
+
+		def date_from_std_to_CBRU(date):
+			'''
+			Standard format (YYYY-MM-DD) to CBRU query format (DD/MM/YYYY)
+			'''
+			return "/".join(str(date).split("-")[::-1])
+
+		def date_from_CBRU_to_std(date):
+			'''
+			CBRU return format (DD.MM.YYYY) to Standard format (YYYY-MM-DD)
+			'''
+			return "-".join(str(date).replace("/",".").split(".")[::-1])
+
+		if not graph:
+			if len(parse)==4:
+				date = date_from_std_to_CBRU(parse[3])
+			else:
+				date = ""
+
+			page = getHTML_specifyEncoding( 'http://www.cbr.ru/scripts/XML_daily.asp' + (('?date_req=' + date) if date else "")
+				,encoding='windows-1251'
+				,method="replace")
+			Nominal = float(parse[0])
+			currency_from = parse[1].upper()
+			currency_to = parse[2].upper()
+
+			page_root = ET.fromstring(page)
+			try:
+				Valute_from = page_root.findall(".//*[CharCode=\'"+ currency_from+ "\']") if currency_from != "RUB" else None
+				value_from = float(Valute_from[0].findall('.//Value')[0].text.replace(",",".")) if currency_from != "RUB" else 1
+				nominal_from = float(Valute_from[0].findall('.//Nominal')[0].text.replace(",",".")) if currency_from != "RUB" else 1
+
+				Valute_to= page_root.findall(".//*[CharCode=\'"+ currency_to+ "\']") if currency_to != "RUB" else None
+				value_to = float(Valute_to[0].findall('.//Value')[0].text.replace(",",".")) if currency_to != "RUB" else 1
+				nominal_to = float(Valute_to[0].findall('.//Nominal')[0].text.replace(",",".")) if currency_to != "RUB" else 1
+
+				rate = Nominal * (value_from/nominal_from)/(value_to/nominal_to)
+
+				print("date_from_CBRU_to_std( page_root.attrib['Date'] ) ",date_from_CBRU_to_std( page_root.attrib['Date'] ) )#debug
+				return {'rate':rate, 'date': date_from_CBRU_to_std( page_root.attrib['Date'] )}
+			except IndexError:
+				return {'error': "Unknown error"}
+
+
+
+	def getData(self,parse,chat_id=None,graph=False):
+		'''
+		Universal data getter handling several sources
+		'''
+
+		result=""
+
+		source=self.subscribers[chat_id][1]
+
+		if source=="FixerIO":
+			page = self.FixerIO_GetData(parse)
+			if 'error' in page.keys():
+				pass
+				if "Invalid base" in page['error']:
+					result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
+				else:
+					result = page['error']
+			else:
+				try:
+					rate = float(list(page['rates'].values())[0]) * float(parse[0])
+					date = page['date']
+					result = {'rate' : rate, 'date': date}
+				except IndexError:
+					result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
+
+		elif source=="CBRU":
+			result1 = self.CBRU_GetData(parse)
+			if 'error' in result1.keys():
+				result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
+			else:
+				result = result1
+
+		return result
 
 	def FixerIO_getCurrencyList(self):
+		'''
+		Gets list of currencies available from ECB.
+		'''
 		page = getHTML_specifyEncoding('https://api.fixer.io/latest')
 		result = list(json.loads(page)['rates'].keys() ) + [ json.loads(page)['base'] ]
 		result.sort()
 		result = [i.upper() for i in result]
 		return result
 
-	def getData(self,parse,chat_id=None):
+	def CBRU_getCurrencyList(self):
 		'''
-		Universal data getter handling several sources
+		Gets list of currencies available from CBRU.
+		'''
+		page = getHTML_specifyEncoding('http://www.cbr.ru/scripts/XML_daily.asp',
+			encoding='windows-1251'
+			,method="replace")
+		result = [i.text.upper() for i in ET.fromstring(page).findall(".//CharCode")]
+		result.sort()
+		return result
+
+	def getCurrencyList(self,chat_id):
+		'''
+		Get list of currencies available from the given source
 		'''
 
-		page = self.FixerIO_GetData(parse)
-		if 'error' in page.keys():
-			pass
-			if "Invalid base" in page['error']:
-				result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[1].upper()
-			else:
-				result = page['error']
-		else:
-			try:
-				rate = float(list(page['rates'].values())[0]) * float(parse[0])
-				date = page['date']
-				result = {'rate' : rate, 'date': date}
-			except IndexError:
-				result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
+		result = ""
+		source=self.subscribers[chat_id][1]
+
+		if source=="FixerIO":
+			result = self.FixerIO_getCurrencyList()
+		elif source=="CBRU":
+			result = self.CBRU_getCurrencyList()
 
 		return result
+
+	def setSource(self,chat_id,source):
+		'''
+		Sets the tates source for the current user
+		'''
+		if "ECB" in source:
+			self.subscribers[chat_id][1]= "FixerIO"
+			self.saveSubscribers()
+		elif "CBRU" in source:
+			self.subscribers[chat_id][1]= "CBRU"
+			self.saveSubscribers()
+		else:
+			pass
 
 	def graph_plotting_process(self,chat_id,q,parse):
 		'''
@@ -504,12 +631,6 @@ class TelegramBot():
 					rates = []
 					text_dates = []
 
-					print("date_range",date_range)#debug
-
-					# while len(date_range)>MAXIMUM_DOTS_PER_CHART:
-					# 	#remove every second entry until the range is smaller than the maximum
-					# 	date_range = date_range[::2]
-
 					try:
 						for DATE in date_range:
 							data = self.getData(['1'] + parse[:2]+ [DATE.strftime("%Y-%m-%d")],chat_id=chat_id)
@@ -520,15 +641,7 @@ class TelegramBot():
 						text_dates = rm_doubles(text_dates)
 						UNIX_dates, rates = rm_doubles(UNIX_dates,rates)
 
-
-						# print(text_dates)#debug
-						# print(UNIX_dates)#debug
-						# print(rates)#debug
-
 						save_filename = create_plot(UNIX_dates,rates,x_ticks=text_dates,Title=parse[0].upper()+"/"+parse[1].upper()+" rates")
-
-						# with open(TEMP_PLOT_IMAGE_FILE_PATH,'rb') as pic:
-						# 	self.sendPic(chat_id=chat_id,pic=pic)
 
 						result = "send_pic"
 
@@ -558,6 +671,7 @@ class TelegramBot():
 				if proc_result[0] == "send_pic":
 					with open(proc_result[1],'rb') as pic:
 						self.sendPic(chat_id=user,pic=pic)
+						self.sendMessage(chat_id=user,text=self.languageSupport(user,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(user,ECB_MESSAGE if self.subscribers[user][1]=="FixerIO" else CBRU_MESSAGE) )
 					os.remove(proc_result[1])#I don't need a graph once it is sent. Delete the temporary file
 				else:
 					self.sendMessage(chat_id=user,text=str(proc_result[0]))
@@ -577,7 +691,7 @@ class TelegramBot():
 			try:
 				self.subscribers[chat_id]
 			except KeyError:
-				self.subscribers[chat_id] = ["EN"]
+				self.subscribers[chat_id] = INITIAL_SUBSCRIBERS_LIST
 
 			try:
 				if message:
@@ -598,19 +712,22 @@ class TelegramBot():
 							,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
 							)
 					elif message == RU_LANG_BUTTON:
-						self.subscribers[chat_id][0] = "RU"
-						self.saveSubscribers()
+						self.assignBotLanguage(chat_id,'RU')
 						self.sendMessage(chat_id=chat_id
 							,text="Сообщения бота будут отображаться на русском языке."
 							)
 					elif message == EN_LANG_BUTTON:
-						self.subscribers[chat_id][0] = "EN"
-						self.saveSubscribers()
+						self.assignBotLanguage(chat_id,'EN')
 						self.sendMessage(chat_id=chat_id
 							,text="Bot messages will be shown in English."
 							)
+					elif "Source:" in message:
+						self.setSource(chat_id,message)
+						self.sendMessage(chat_id=chat_id
+							,text=self.languageSupport(chat_id,{"EN":"Source is set to ","RU":"Иcточник установлен на "}) + message.replace("Source:","")
+							)
 					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
-						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.FixerIO_getCurrencyList()] )
+						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList(chat_id)] ) + "\n\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
 						self.sendMessage(chat_id=chat_id
 							,text=str(result)
 							)
@@ -645,7 +762,7 @@ class TelegramBot():
 								if isinstance(result,str):
 									pass
 								elif isinstance(result, dict):
-									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) 
+									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) + "\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
 								else:
 									result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
 
