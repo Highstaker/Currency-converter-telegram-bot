@@ -1,10 +1,9 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #TODO
-#-Add more sources. ECB is not sufficient
 #-custom bookmarks
 
-VERSION_NUMBER = (0,7,2)
+VERSION_NUMBER = (0,7,3)
 
 import random
 import logging
@@ -155,7 +154,7 @@ Version: """ + ".".join([str(i) for i in VERSION_NUMBER]) + """
 
 This bot uses the [python-telegram-bot](https://github.com/leandrotoledo/python-telegram-bot) library.
 
-Rates are received from ECB
+Rates are received from European Central Bank or Central Bank of Russian Federation
 """
 ,"RU": """*Currency Converter Bot*
 _Автор:_ Highstaker a.k.a. OmniSable.
@@ -166,7 +165,7 @@ _Автор:_ Highstaker a.k.a. OmniSable.
 
 Этот бот написан на основе библиотеки [python-telegram-bot](https://github.com/leandrotoledo/python-telegram-bot).
 
-Данные о курсах валют берутся с портала Европейского Центробанка.
+Данные о курсах валют берутся с портала Европейского Центробанка или Центрального Банка РФ.
 """
 }
 
@@ -199,6 +198,12 @@ COULD_NOT_FIND_DATA_MESSAGE = {"EN": "Could not find any data. Is the date forma
 DATE_INCORRECT_MESSAGE  = {"EN":"Date is incorrect!", "RU": "Неверная дата!"}
 
 UNKNOWN_ERROR_MESSAGE = {"EN": "Unknown error!", "RU": "Неизвестная ошибка!"}
+
+RATES_ARE_TAKEN_FROM_MESSAGE = {"EN": "Rates are taken from: ", "RU": "Источник: "}
+
+ECB_MESSAGE ={"EN": 'European Central Bank', "RU": 'Европейский Центробанк'}
+
+CBRU_MESSAGE = {"EN": 'Central Bank of Russian Federation', "RU": "Центробанк РФ"}
 
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
@@ -661,6 +666,7 @@ class TelegramBot():
 				if proc_result[0] == "send_pic":
 					with open(proc_result[1],'rb') as pic:
 						self.sendPic(chat_id=user,pic=pic)
+						self.sendMessage(chat_id=user,text=self.languageSupport(user,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(user,ECB_MESSAGE if self.subscribers[user][1]=="FixerIO" else CBRU_MESSAGE) )
 					os.remove(proc_result[1])#I don't need a graph once it is sent. Delete the temporary file
 				else:
 					self.sendMessage(chat_id=user,text=str(proc_result[0]))
@@ -751,7 +757,7 @@ class TelegramBot():
 								if isinstance(result,str):
 									pass
 								elif isinstance(result, dict):
-									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) 
+									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date'] + "\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE) ) 
 								else:
 									result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
 
