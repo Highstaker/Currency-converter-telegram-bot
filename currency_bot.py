@@ -57,6 +57,9 @@ CURRENCY_NAMES = {
 	,"CAD": {"EN":"Canadian Dollar","RU":"Канадский доллар"}
 	,"ZAR":	{"EN":"South African rand","RU":"Южноафриканский рэнд"}
 	,"SGD": {"EN":"Singaporean Dollar","RU":"Сингапурский доллар"}
+	,"UAH": {"EN": "Ukrainian hryvnia", "RU": "Украинсая гривна"}
+	,"BYR": {"EN": "Belarusian ruble", "RU": "Белорусский рубль"}
+	,"RON": {"EN": "Romanian leu" , "RU": "Румынский лей"}
 }
 
 #A filename of a file containing a token.
@@ -724,7 +727,7 @@ class TelegramBot():
 							,text=self.languageSupport(chat_id,{"EN":"Source is set to ","RU":"Иcточник установлен на "}) + message.replace("Source:","")
 							)
 					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
-						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList(chat_id)] ) + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + "\n\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
+						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList(chat_id)] ) + "\n\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
 						self.sendMessage(chat_id=chat_id
 							,text=str(result)
 							)
