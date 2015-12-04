@@ -3,7 +3,7 @@
 #TODO
 #-custom bookmarks
 
-VERSION_NUMBER = (0,7,3)
+VERSION_NUMBER = (0,7,4)
 
 import random
 import logging
@@ -57,7 +57,7 @@ CURRENCY_NAMES = {
 	,"CAD": {"EN":"Canadian Dollar","RU":"Канадский доллар"}
 	,"ZAR":	{"EN":"South African rand","RU":"Южноафриканский рэнд"}
 	,"SGD": {"EN":"Singaporean Dollar","RU":"Сингапурский доллар"}
-	,"UAH": {"EN": "Ukrainian hryvnia", "RU": "Украинсая гривна"}
+	,"UAH": {"EN": "Ukrainian hryvnia", "RU": "Украинская гривна"}
 	,"BYR": {"EN": "Belarusian ruble", "RU": "Белорусский рубль"}
 	,"RON": {"EN": "Romanian leu" , "RU": "Румынский лей"}
 }
@@ -724,7 +724,7 @@ class TelegramBot():
 					elif "Source:" in message:
 						self.setSource(chat_id,message)
 						self.sendMessage(chat_id=chat_id
-							,text=self.languageSupport(chat_id,{"EN":"Source is set to ","RU":"Иcточник установлен на "}) + message.replace("Source:","")
+							,text=self.languageSupport(chat_id,{"EN":"Source is set to:","RU":"Иcточник установлен на:"}) + message.replace("Source:","")
 							)
 					elif message == self.languageSupport(chat_id,CURRENCY_LIST_BUTTON):
 						result = self.languageSupport(chat_id,{"EN":"*Available currencies:* \n","RU":"*Доступные валюты:* \n"}) + "\n".join( [(i + ( " - " + self.languageSupport(chat_id,CURRENCY_NAMES[i]) if i in CURRENCY_NAMES else "" ) ) for i in self.getCurrencyList(chat_id)] ) + "\n\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
@@ -762,7 +762,7 @@ class TelegramBot():
 								if isinstance(result,str):
 									pass
 								elif isinstance(result, dict):
-									result = parse[0] + " " + parse[1].upper() + " = " + str(result['rate'])  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) + "\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
+									result = parse[0] + " " + parse[1].upper() + " = " + str(round(float(result['rate']),2))  + " " + parse[2].upper() + "\n*" + self.languageSupport(chat_id, RESULT_DATE_MESSAGE) + "*" + str(result['date']) + "\n" + self.languageSupport(chat_id,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(chat_id,ECB_MESSAGE if self.subscribers[chat_id][1]=="FixerIO" else CBRU_MESSAGE)  
 								else:
 									result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
 
