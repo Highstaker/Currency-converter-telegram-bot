@@ -60,6 +60,31 @@ CURRENCY_NAMES = {
 	,"UAH": {"EN": "Ukrainian hryvnia", "RU": "Украинская гривна"}
 	,"BYR": {"EN": "Belarusian ruble", "RU": "Белорусский рубль"}
 	,"RON": {"EN": "Romanian leu" , "RU": "Румынский лей"}
+	,"PHP": {"EN": "Philippine peso" , "RU": "Филиппинский песо"}
+	,"HUF": {"EN": "Hungarian forint" , "RU": "Венгерский форинт"}
+	,"INR": {"EN": "Indian rupee" , "RU": "Индийская рупия"}
+	,"CNY": {"EN": "Chinese yuang" , "RU": "Китайский юань"}
+	,"AZN": {"EN": "Azerbaijani manat" , "RU": "Азербайджанский манат"}
+	,"MYR": {"EN": "Malaysian ringgit" , "RU": "Малайзийский ринггит"}
+	,"TRY": {"EN": "Turkish lira" , "RU": "Турецкая лира"}
+	,"THB": {"EN": "Thai baht" , "RU": "Тайский бат"}
+	,"IDR": {"EN": "Indonesian rupiah" , "RU": "Индонезийская рупия"}
+	,"ILS": {"EN": "Israeli new shekel" , "RU": "Новый израильский шекель"}
+	,"KRW": {"EN": "South Korean won" , "RU": "Южнокорейская вона"}
+	,"MXN": {"EN": "Mexican peso" , "RU": "Мексиканское песо"}
+	,"HKD": {"EN": "Hong Kong dollar" , "RU": "Гонконгский доллар"}
+	,"HRK": {"EN": "Croatian kuna" , "RU": "Хорватская куна"}
+	,"AMD": {"EN": "Armenian dram" , "RU": "Армянский драм"}
+	,"KGS": {"EN": "Kyrgyzstani som" , "RU": "Киргизский сом"}
+	,"KZT": {"EN": "Kazakhstani tenge" , "RU": "Казахстанский тенге"}
+	,"TJS": {"EN": "Tajikistani somoni" , "RU": "Таджикский сомони"}
+	,"UZS": {"EN": "Uzbekistani som" , "RU": "Узбекский сум"}
+	,"MDL": {"EN": "Moldovan leu" , "RU": "Молдавский лей"}
+	,"XDR": {"EN": "Special drawing rights" , "RU": "Специальные права заимствования"}
+	,"TMT": {"EN": "Turkmenistan manat" , "RU": "Туркменский манат"}
+
+
+
 }
 
 #A filename of a file containing a token.
