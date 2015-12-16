@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 #TODO
 #-custom bookmarks
+#https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0,7,4)
+VERSION_NUMBER = (0,7,5)
 
 import random
 import logging
@@ -142,7 +143,7 @@ Available ranges are:
 You may also request a chart with rates for a period before a certain date. For example, if you want rates for 3 months before May 9 2014, type:
 _g eur usd 3m 2014-05-09_
 
-You can choose a source of information by pressing a respective button.
+You can choose a source of information by pressing a respective button. If your currency is not present on the list, try choosing another source, it may be there.
 
 '''
 ,"RU":'''
@@ -172,7 +173,7 @@ _g eur usd 3m_
 Можно также узнать котировки за период до определённой даты. Например, чтобы увидеть курс за 3 месяца до 9 мая 2014 года: введите
 _g eur usd 3m 2014-05-09_
 
-Вы можете выбрать источник котировок, нажав на кнопку _Source: (источник)_
+Вы можете выбрать источник котировок, нажав на кнопку _Source: (источник)_. Если нужной валюты нет в списке, попробуйте выбрать другой источник, она может быть там.
 '''
 }
 
@@ -325,7 +326,7 @@ class TelegramBot():
 		try:
 			with open(SUBSCRIBERS_BACKUP_FILE,'rb') as f:
 				self.subscribers = pickle.load(f)
-				print("self.subscribers",self.subscribers)
+				logging.warning("self.subscribers",self.subscribers)
 		except FileNotFoundError:
 			logging.warning("Subscribers backup file not found. Starting with empty list!")
 
@@ -363,16 +364,16 @@ class TelegramBot():
 					logging.error("Could not send message. Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
 			break
 
-	def sendPic(self,chat_id,pic):
+	def sendPic(self,chat_id,pic,caption=None):
 		while True:
 			try:
 				logging.debug("Picture: " + str(pic))
 				self.bot.sendChatAction(chat_id,telegram.ChatAction.UPLOAD_PHOTO)
 				#set file read cursor to the beginning. This ensures that if a file needs to be re-read (may happen due to exception), it is read from the beginning.
 				pic.seek(0)
-				self.bot.sendPhoto(chat_id=chat_id,photo=pic)
+				self.bot.sendPhoto(chat_id=chat_id,photo=pic,caption=caption)
 			except Exception as e:
-				logging.error("Could not send picture. Retrying! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
+				logging.error("Could not send picture. Retrying! Error: " + str(e))
 				continue
 			break
 
@@ -457,7 +458,7 @@ class TelegramBot():
 
 				rate = Nominal * (value_from/nominal_from)/(value_to/nominal_to)
 
-				print("date_from_CBRU_to_std( page_root.attrib['Date'] ) ",date_from_CBRU_to_std( page_root.attrib['Date'] ) )#debug
+				# print("date_from_CBRU_to_std( page_root.attrib['Date'] ) ",date_from_CBRU_to_std( page_root.attrib['Date'] ) )#debug
 				return {'rate':rate, 'date': date_from_CBRU_to_std( page_root.attrib['Date'] )}
 			except IndexError:
 				return {'error': "Unknown error"}
@@ -692,11 +693,11 @@ class TelegramBot():
 			if not self.graph_processes[user][0].is_alive():
 				#proc_result is a tuple of ('send_pic',file_path) if the process successfully generated a chart, and a one-element tuple with result message to be shown if it failed.
 				proc_result = self.graph_processes[user][1].get()
-				print("proc_result",proc_result)
+				# print("proc_result",proc_result)#debug
 				if proc_result[0] == "send_pic":
 					with open(proc_result[1],'rb') as pic:
-						self.sendPic(chat_id=user,pic=pic)
-						self.sendMessage(chat_id=user,text=self.languageSupport(user,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(user,ECB_MESSAGE if self.subscribers[user][1]=="FixerIO" else CBRU_MESSAGE) )
+						self.sendPic(chat_id=user,pic=pic,caption=self.languageSupport(user,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(user,ECB_MESSAGE if self.subscribers[user][1]=="FixerIO" else CBRU_MESSAGE) )
+						# self.sendMessage(chat_id=user,text=self.languageSupport(user,RATES_ARE_TAKEN_FROM_MESSAGE) + self.languageSupport(user,ECB_MESSAGE if self.subscribers[user][1]=="FixerIO" else CBRU_MESSAGE) )
 					os.remove(proc_result[1])#I don't need a graph once it is sent. Delete the temporary file
 				else:
 					self.sendMessage(chat_id=user,text=str(proc_result[0]))
