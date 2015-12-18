@@ -4,7 +4,7 @@
 #-custom bookmarks
 #https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0,7,5)
+VERSION_NUMBER = (0,7,6)
 
 import random
 import logging
@@ -83,9 +83,6 @@ CURRENCY_NAMES = {
 	,"MDL": {"EN": "Moldovan leu" , "RU": "Молдавский лей"}
 	,"XDR": {"EN": "Special drawing rights" , "RU": "Специальные права заимствования"}
 	,"TMT": {"EN": "Turkmenistan manat" , "RU": "Туркменский манат"}
-
-
-
 }
 
 #A filename of a file containing a token.
@@ -357,11 +354,11 @@ class TelegramBot():
 						)
 					break
 				if ("urlopen error" in str(e)) or ("timed out" in str(e)):
-					logging.error("Could not send message. Retrying! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
+					logging.error("Could not send message. Retrying! Error: " + str(e))
 					sleep(3)
 					continue
 				else:
-					logging.error("Could not send message. Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
+					logging.error("Could not send message. Error: " + str(e))
 			break
 
 	def sendPic(self,chat_id,pic,caption=None):
@@ -373,8 +370,12 @@ class TelegramBot():
 				pic.seek(0)
 				self.bot.sendPhoto(chat_id=chat_id,photo=pic,caption=caption)
 			except Exception as e:
-				logging.error("Could not send picture. Retrying! Error: " + str(e))
-				continue
+				if ("urlopen error" in str(e)) or ("timed out" in str(e)):
+					logging.error("Could not send message. Retrying! Error: " + str(e))
+					sleep(3)
+					continue
+				else:
+					logging.error("Could not send message. Error: " + str(e))
 			break
 
 	def getUpdates(self):
