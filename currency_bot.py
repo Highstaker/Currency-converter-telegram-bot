@@ -1,30 +1,28 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #TODO
-#-custom bookmarks
-#https://www.google.com/finance/converter?a=1&from=USD&to=RUB
+# -custom bookmarks
+# https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0,7,6)
+VERSION_NUMBER = (0, 7, 7)
 
 import random
 import logging
 import telegram
-from time import time
+from time import sleep
 import sys
 import os
-from os import path, listdir, walk
+from os import path
 import socket
-import pickle #module for saving dictionaries to file
-from bs4 import BeautifulSoup #HTML parser
-import re
+import pickle  # module for saving dictionaries to file
 import json
 from datetime import date, timedelta, datetime
-from multiprocessing import Process, Queue, Lock
+from multiprocessing import Process, Queue
 import xml.etree.ElementTree as ET
 
 from webpage_reader import getHTML_specifyEncoding
 
-#if a connection is lost and getUpdates takes too long, an error is raised
+# if a connection is lost and getUpdates takes too long, an error is raised
 socket.setdefaulttimeout(30)
 
 logging.basicConfig(format = u'[%(asctime)s] %(filename)s[LINE:%(lineno)d]# %(levelname)-8s  %(message)s', 
@@ -136,6 +134,10 @@ Available ranges are:
 *6m* - six months
 *1y* - one year
 *2y* - two years
+*3y* - three years
+*4y* - four years
+*5y* - five years
+*10y* - ten years
 
 You may also request a chart with rates for a period before a certain date. For example, if you want rates for 3 months before May 9 2014, type:
 _g eur usd 3m 2014-05-09_
@@ -166,6 +168,10 @@ _g eur usd 3m_
 *6m* - шесть месяцев
 *1y* - один год
 *2y* - два года
+*3y* - три года
+*4y* - четыре года
+*5y* - пять лет
+*10y* - десять лет
 
 Можно также узнать котировки за период до определённой даты. Например, чтобы увидеть курс за 3 месяца до 9 мая 2014 года: введите
 _g eur usd 3m 2014-05-09_
@@ -379,10 +385,10 @@ class TelegramBot():
 			break
 
 	def getUpdates(self):
-		'''
+		"""
 		Gets updates. Retries if it fails.
-		'''
-		#if getting updates fails - retry
+		"""
+		# if getting updates fails - retry
 		while True:
 			try:
 				updates = self.bot.getUpdates(offset=self.LAST_UPDATE_ID, timeout=3)
@@ -393,9 +399,9 @@ class TelegramBot():
 		return updates
 
 	def FixerIO_GetData(self,parse,chat_id=None):
-		'''
+		"""
 		Gets currency data from fixer.io (Which in turn gets data from ECB)
-		'''
+		"""
 		if len(parse)==4:
 			date=str(parse[3])
 		else:
@@ -418,9 +424,9 @@ class TelegramBot():
 		return result
 
 	def CBRU_GetData(self,parse,chat_id=None,graph=False):
-		'''
+		"""
 		Gets currency data from Russian Central Bank
-		'''
+		"""
 
 		def date_from_std_to_CBRU(date):
 			'''
@@ -557,7 +563,7 @@ class TelegramBot():
 			result = "Invalid format!"
 		else:
 
-			def daterange(start_date, end_date, only_days=[0,1,2,3,4,5,6]):
+			def daterange(start_date, end_date, only_days=(0,1,2,3,4,5,6)):
 				'''
 				Returns dates in given range. May be set up to return only certain days of week (specified in `only_days`, Monday is 0, Sunday is 6).
 				'''
@@ -628,21 +634,37 @@ class TelegramBot():
 				try:
 					if parse[2] == "1m":
 						start_date = end_date - timedelta(weeks=4)
-						date_range = daterange(start_date,end_date,only_days=[0,1,2,3,4])
+						date_range = daterange(start_date,end_date,only_days=(0,1,2,3,4,))
 					elif parse[2] == "3m":
 						start_date = end_date - timedelta(weeks=12)
-						date_range = daterange(start_date,end_date,only_days=[0,4])
+						date_range = daterange(start_date,end_date,only_days=(0,4,))
 					elif parse[2] == "6m":
 						start_date = end_date - timedelta(weeks=24)
-						date_range = daterange(start_date,end_date,only_days=[0])
+						date_range = daterange(start_date,end_date,only_days=(0,))
 					elif parse[2] in ["1y","12m"]:
 						start_date = end_date - timedelta(weeks=49)
-						date_range = daterange(start_date,end_date,only_days=[0])
+						date_range = daterange(start_date,end_date,only_days=(0,))
 						date_range = date_range[::2]
 					elif parse[2] in ["2y","24m"]:
 						start_date = end_date - timedelta(weeks=97)
-						date_range = daterange(start_date,end_date,only_days=[0])
+						date_range = daterange(start_date,end_date,only_days=(0,))
 						date_range = date_range[::4]
+					elif parse[2] in ["3y","36m"]:
+						start_date = end_date - timedelta(weeks=145)
+						date_range = daterange(start_date,end_date,only_days=(0,))
+						date_range = date_range[::6]
+					elif parse[2] in ["4y","48m"]:
+						start_date = end_date - timedelta(weeks=193)
+						date_range = daterange(start_date,end_date,only_days=(0,))
+						date_range = date_range[::8]
+					elif parse[2] in ["5y","60m"]:
+						start_date = end_date - timedelta(weeks=241)
+						date_range = daterange(start_date,end_date,only_days=(0,))
+						date_range = date_range[::10]
+					elif parse[2] in ["10y","120m"]:
+						start_date = end_date - timedelta(weeks=481)
+						date_range = daterange(start_date,end_date,only_days=(0,))
+						date_range = date_range[::20]
 					else:
 						raise Exception('Wrong daterange parameter')
 
@@ -653,7 +675,7 @@ class TelegramBot():
 						logging.error("Daterange error: " + str(e))
 						result = "Unknown error"
 				else:
-					#got a parameter right, drawing
+					# got a parameter right, drawing
 					UNIX_dates = []
 					rates = []
 					text_dates = []

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-#this is a LIBRARY
+# this is a LIBRARY
 
 # from urllib.request import urlopen
 import requests
