@@ -4,7 +4,7 @@
 # -custom bookmarks
 # https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0, 7, 7)
+VERSION_NUMBER = (0, 8, 0)
 
 import random
 import logging
@@ -90,8 +90,8 @@ TOKEN_FILENAME = 'token'
 SUBSCRIBERS_BACKUP_FILE = 'omni_currency_bot_subscribers_bak.save'
 
 #A subscribers list assigned to a new user.
-#["EN",source]
-INITIAL_SUBSCRIBERS_LIST = ["EN",'FixerIO']
+#["EN",source,last currency pair used]
+INITIAL_SUBSCRIBERS_LIST = ["EN",'FixerIO',["EUR","USD"] ]
 
 #########
 ####BUTTONS
@@ -392,10 +392,10 @@ class TelegramBot():
 		while True:
 			try:
 				updates = self.bot.getUpdates(offset=self.LAST_UPDATE_ID, timeout=3)
+				break
 			except Exception as e:
 				logging.error("Could not read updates. Retrying! Error: " + str(sys.exc_info()[-1].tb_lineno) + ": " + str(e))
-				continue
-			break
+
 		return updates
 
 	def FixerIO_GetData(self,parse,chat_id=None):
@@ -481,6 +481,9 @@ class TelegramBot():
 
 		source=self.subscribers[chat_id][1]
 
+		if len(parse) == 1:
+			parse += self.subscribers[chat_id][2]
+
 		if source=="FixerIO":
 			page = self.FixerIO_GetData(parse)
 			if 'error' in page.keys():
@@ -498,11 +501,17 @@ class TelegramBot():
 					result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
 
 		elif source=="CBRU":
-			result1 = self.CBRU_GetData(parse)
-			if 'error' in result1.keys():
+			page = self.CBRU_GetData(parse)
+			if 'error' in page.keys():
 				result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
 			else:
-				result = result1
+				result = page
+
+		if len(parse) in (3,4,) and not ('error' in page.keys()):
+			# if no errors, set this currency pair as the last one
+			self.subscribers[chat_id][2][0] = parse[1]
+			self.subscribers[chat_id][2][1] = parse[2]
+			self.saveSubscribers()
 
 		return result
 
@@ -803,7 +812,7 @@ class TelegramBot():
 						else:
 							#user asks for one rate
 
-							if not ( len(parse) == 3 or len(parse) == 4) or not is_number(parse[0]):
+							if not ( len(parse) in (1,3,4,) ) or not is_number(parse[0]):
 								result = self.languageSupport(chat_id,INVALID_FORMAT_MESSAGE)
 							else:
 								result = self.getData(parse,chat_id=chat_id)
