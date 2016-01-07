@@ -4,7 +4,7 @@
 # -custom bookmarks
 # https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0, 8, 0)
+VERSION_NUMBER = (0, 8, 1)
 
 import random
 import logging
@@ -749,7 +749,7 @@ class TelegramBot():
 			try:
 				self.subscribers[chat_id]
 			except KeyError:
-				self.subscribers[chat_id] = INITIAL_SUBSCRIBERS_LIST
+				self.subscribers[chat_id] = INITIAL_SUBSCRIBERS_LIST[:]
 
 			try:
 				if message:
