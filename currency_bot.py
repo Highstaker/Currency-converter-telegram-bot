@@ -471,20 +471,19 @@ class TelegramBot():
 				return {'error': "Unknown error"}
 
 
-
-	def getData(self,parse,chat_id=None,graph=False):
-		'''
+	def getData(self, parse, chat_id=None, graph=False):
+		"""
 		Universal data getter handling several sources
-		'''
+		"""
 
-		result=""
+		result = ""
 
-		source=self.subscribers[chat_id][1]
+		source = self.subscribers[chat_id][1]
 
 		if len(parse) == 1:
 			parse += self.subscribers[chat_id][2]
 
-		if source=="FixerIO":
+		if source == "FixerIO":
 			page = self.FixerIO_GetData(parse)
 			if 'error' in page.keys():
 				pass
@@ -500,7 +499,7 @@ class TelegramBot():
 				except IndexError:
 					result = self.languageSupport(chat_id,UNKNOWN_CURRENCY_MESSAGE) + parse[2].upper()
 
-		elif source=="CBRU":
+		elif source == "CBRU":
 			page = self.CBRU_GetData(parse)
 			if 'error' in page.keys():
 				result = self.languageSupport(chat_id,UNKNOWN_ERROR_MESSAGE)
