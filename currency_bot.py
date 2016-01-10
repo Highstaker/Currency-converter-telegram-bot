@@ -4,7 +4,7 @@
 # -custom bookmarks
 # https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0, 8, 1)
+VERSION_NUMBER = (0, 8, 2)
 
 import random
 import logging
