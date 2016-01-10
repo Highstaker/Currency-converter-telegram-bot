@@ -119,6 +119,8 @@ _99.50 USD EUR_
 
 If you want to see a rate on a certain day in the past, use: \[amount] \[source currency] \[destination currency] \[YYYY-MM-DD]
 
+You may simply type a number, and the rate for the last used currency pair will be shown.
+
 For example, to convert 99 U.S. Dollars 50 cents to Euros using a rate of September 6, 2012, type:
 _99.50 USD EUR 2012-09-06_
 
@@ -151,6 +153,8 @@ You can choose a source of information by pressing a respective button. If your 
 
 Например, чтобы узнать, сколько евро в 99 долларах 50 центах, введите:
 _99.50 USD EUR_
+
+Можно также просто ввести число, и тогда отобразится курс для последней валютной пары.
 
 Чтобы узнать курс в определённый день в прошлом, введите: \[количество единиц валюты] \[обозначение валюты, *из которой* надо перевести] \[обозначение валюты, *в которую* надо перевести] \[ГГГГ-ММ-ДД]
 
