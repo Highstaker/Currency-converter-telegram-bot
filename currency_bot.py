@@ -104,6 +104,7 @@ CURRENCY_LIST_BUTTON = {"EN":"List of available currencies", "RU": "Список
 RATE_ME_BUTTON = {"EN" : "⭐️ Like me? Rate!", "RU": "⭐️ Нравится бот? Оцени!"}
 EN_LANG_BUTTON = "🇬🇧 EN"
 RU_LANG_BUTTON = "🇷🇺 RU"
+OTHER_BOTS_BUTTON = {"EN":"👾 My other bots", "RU": "👾 Другие мои боты"}
 
 ##############
 ####MESSAGES
@@ -243,6 +244,15 @@ ECB_MESSAGE ={"EN": 'European Central Bank', "RU": 'Европейский Це�
 
 CBRU_MESSAGE = {"EN": 'Central Bank of Russian Federation', "RU": "Центробанк РФ"}
 
+OTHER_BOTS_MESSAGE = {"EN": """*My other bots*:
+
+@multitran\_bot: a Russian-Whichever dictionary with support of 9 languages. Has transcriptions for English words.
+"""
+, "RU": """*Другие мои боты*:
+@multitran\_bot: Русско-любой словарь с поддержкой 9 языков. Есть транскрипции английских слов.
+"""
+}
+
 def split_list(alist,max_size=1):
 	"""Yield successive n-sized chunks from l."""
 	for i in range(0, len(alist), max_size):
@@ -250,7 +260,7 @@ def split_list(alist,max_size=1):
 
 MAIN_MENU_KEY_MARKUP = [
 [CURRENCY_LIST_BUTTON]
-,[HELP_BUTTON,ABOUT_BUTTON,RATE_ME_BUTTON]
+,[HELP_BUTTON,ABOUT_BUTTON,RATE_ME_BUTTON,OTHER_BOTS_BUTTON]
 ,[EN_LANG_BUTTON,RU_LANG_BUTTON]
 ,["Source: ECB", "Source: CBRU"]
 ]
@@ -771,6 +781,10 @@ class TelegramBot():
 					elif message == "/rate" or message == self.languageSupport(chat_id,RATE_ME_BUTTON):
 						self.sendMessage(chat_id=chat_id
 							,text=self.languageSupport(chat_id,RATE_ME_MESSAGE)
+							)
+					elif message == "/otherbots" or message == self.languageSupport(chat_id,OTHER_BOTS_BUTTON):
+						self.sendMessage(chat_id=chat_id
+							,text=self.languageSupport(chat_id,OTHER_BOTS_MESSAGE)
 							)
 					elif message == RU_LANG_BUTTON:
 						self.assignBotLanguage(chat_id,'RU')
