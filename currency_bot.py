@@ -4,7 +4,7 @@
 # -custom bookmarks
 # https://www.google.com/finance/converter?a=1&from=USD&to=RUB
 
-VERSION_NUMBER = (0, 8, 2)
+VERSION_NUMBER = (0, 8, 3)
 
 import random
 import logging
@@ -365,7 +365,7 @@ class TelegramBot():
 						text=text,
 						parse_mode='Markdown',
 						disable_web_page_preview=(not preview),
-						reply_markup=telegram.ReplyKeyboardMarkup(key_markup)
+						reply_markup=telegram.ReplyKeyboardMarkup(key_markup, resize_keyboard=True)
 						)
 			except Exception as e:
 				if "Message is too long" in str(e):
